@@ -17,12 +17,12 @@ const defaultProps = {
 };
 
 describe('IsoHomeControls', () => {
-  it('renders the terminus dropdown with 10 options', () => {
+  it('renders the terminus dropdown with 11 options', () => {
     render(<IsoHomeControls {...defaultProps} />);
     const select = screen.getByLabelText('London Terminus');
     expect(select).toBeInTheDocument();
     const options = select.querySelectorAll('option');
-    expect(options).toHaveLength(10);
+    expect(options).toHaveLength(11);
   });
 
   it('renders the time slider', () => {

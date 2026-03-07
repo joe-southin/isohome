@@ -9,6 +9,7 @@ export const LONDON_TERMINI = [
   { crs: 'CHX', name: 'Charing Cross' },
   { crs: 'EUS', name: 'Euston' },
   { crs: 'MYB', name: 'Marylebone' },
+  { crs: 'STP', name: 'St Pancras International' },
 ] as const;
 
 export const TIME_BUCKETS = [30, 45, 60, 75, 90, 120] as const;

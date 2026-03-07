@@ -3,8 +3,8 @@ import { LONDON_TERMINI, TIME_BUCKETS } from '../config';
 
 describe('config', () => {
   describe('LONDON_TERMINI', () => {
-    it('has 10 entries', () => {
-      expect(LONDON_TERMINI).toHaveLength(10);
+    it('has 11 entries', () => {
+      expect(LONDON_TERMINI).toHaveLength(11);
     });
 
     it('all CRS codes are 3 uppercase characters', () => {

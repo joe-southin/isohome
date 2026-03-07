@@ -59,8 +59,8 @@ describe('Worker API', () => {
       expect(body.code).toBe('NOT_FOUND');
     });
 
-    it('validates all 10 valid CRS codes', async () => {
-      const validCodes = ['KGX', 'PAD', 'WAT', 'VIC', 'LST', 'BFR', 'CST', 'CHX', 'EUS', 'MYB'];
+    it('validates all 11 valid CRS codes', async () => {
+      const validCodes = ['KGX', 'PAD', 'WAT', 'VIC', 'LST', 'BFR', 'CST', 'CHX', 'EUS', 'MYB', 'STP'];
       for (const crs of validCodes) {
         const env = mockEnv(mockR2Object('{}'));
         const res = await worker.fetch(makeRequest(`/api/isochrone/${crs}/60`), env);

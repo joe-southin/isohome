@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { IsoHomeControls } from '../IsoHomeControls';
 
 const defaultProps = {
-  selectedTerminus: 'KGX',
-  onTerminusChange: vi.fn(),
+  selectedTermini: ['KGX'],
+  onTerminiChange: vi.fn(),
   selectedMinutesIndex: 2,
   onMinutesChange: vi.fn(),
   showStations: false,
@@ -17,12 +17,19 @@ const defaultProps = {
 };
 
 describe('IsoHomeControls', () => {
-  it('renders the terminus dropdown with 11 options', () => {
+  it('renders 11 terminus checkboxes', () => {
     render(<IsoHomeControls {...defaultProps} />);
-    const select = screen.getByLabelText('London Terminus');
-    expect(select).toBeInTheDocument();
-    const options = select.querySelectorAll('option');
-    expect(options).toHaveLength(11);
+    const checkboxes = screen.getAllByRole('checkbox').filter(
+      (cb) => cb.getAttribute('aria-label') && cb.getAttribute('aria-label') !== 'Show stations' && cb.getAttribute('aria-label') !== 'Show rail lines'
+    );
+    expect(checkboxes).toHaveLength(11);
+  });
+
+  it('checks selected termini', () => {
+    render(<IsoHomeControls {...defaultProps} selectedTermini={['KGX', 'STP']} />);
+    expect(screen.getByLabelText("King's Cross")).toBeChecked();
+    expect(screen.getByLabelText('St Pancras International')).toBeChecked();
+    expect(screen.getByLabelText('Paddington')).not.toBeChecked();
   });
 
   it('renders the time slider', () => {
@@ -41,12 +48,18 @@ describe('IsoHomeControls', () => {
     expect(screen.getByText(/1 hour/)).toBeInTheDocument();
   });
 
-  it('calls onTerminusChange when selecting a new terminus', async () => {
-    const onTerminusChange = vi.fn();
-    render(<IsoHomeControls {...defaultProps} onTerminusChange={onTerminusChange} />);
-    const select = screen.getByLabelText('London Terminus');
-    await userEvent.selectOptions(select, 'PAD');
-    expect(onTerminusChange).toHaveBeenCalledWith('PAD');
+  it('calls onTerminiChange when toggling a terminus', async () => {
+    const onTerminiChange = vi.fn();
+    render(<IsoHomeControls {...defaultProps} onTerminiChange={onTerminiChange} />);
+    await userEvent.click(screen.getByLabelText('Paddington'));
+    expect(onTerminiChange).toHaveBeenCalledWith('PAD', true);
+  });
+
+  it('calls onTerminiChange with false when unchecking', async () => {
+    const onTerminiChange = vi.fn();
+    render(<IsoHomeControls {...defaultProps} selectedTermini={['KGX']} onTerminiChange={onTerminiChange} />);
+    await userEvent.click(screen.getByLabelText("King's Cross"));
+    expect(onTerminiChange).toHaveBeenCalledWith('KGX', false);
   });
 
   it('renders station toggle switch', () => {

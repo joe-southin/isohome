@@ -67,7 +67,8 @@ def fetch_ors_isochrone(
         response = requester.post(url, json=body, headers=headers, timeout=30)
         response.raise_for_status()
         data = response.json()
-    except Exception:
+    except Exception as e:
+        print(f"    ORS error for ({lon},{lat}) {minutes}min: {e}")
         return None
 
     features = data.get("features", [])

@@ -45,9 +45,10 @@ describe('IsoHomePage', () => {
     expect(screen.getByText('IsoHome')).toBeInTheDocument();
   });
 
-  it('renders the terminus dropdown', () => {
+  it('renders the terminus checkboxes', () => {
     renderWithProviders(<IsoHomePage />);
-    expect(screen.getByLabelText('London Terminus')).toBeInTheDocument();
+    expect(screen.getByLabelText("King's Cross")).toBeInTheDocument();
+    expect(screen.getByLabelText('Paddington')).toBeInTheDocument();
   });
 
   it('renders the time slider', () => {
@@ -65,10 +66,9 @@ describe('IsoHomePage', () => {
     expect(screen.getByTestId('loading-indicator')).toBeInTheDocument();
   });
 
-  it('defaults to KGX terminus', () => {
+  it('defaults to KGX terminus checked', () => {
     renderWithProviders(<IsoHomePage />);
-    const select = screen.getByLabelText('London Terminus') as HTMLSelectElement;
-    expect(select.value).toBe('KGX');
+    expect(screen.getByLabelText("King's Cross")).toBeChecked();
   });
 
   it('defaults to 60 min (index 2)', () => {

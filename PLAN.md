@@ -292,10 +292,33 @@ Key notes:
 
 ## Phase 5 — Future extensions (not specced yet)
 
-Ideas for future phases — these need their own BRIEF → SPEC → PLAN cycle when the time comes:
+Ideas for future phases — these need their own BRIEF → SPEC → PLAN cycle when the time comes.
 
-- **Tube/Overground connectivity**: Add TfL Journey Planner API for zones 3–6 catchment areas
-- **Real-time mode**: "What's the next actual train right now?" using Transport API live departures; isochrone computed live for a single query (not map-wide)
-- **Additional layers**: House price heatmap (Land Registry OpenData), school Ofsted ratings (DfE API), annual sunshine (Met Office), broadband speeds (Ofcom)
+### Priority 1: Additional data layers
+
+Overlay layers to help evaluate locations within the isochrone:
+
+1. **Hours of sunshine** — Met Office climate data
+2. **House price heatmap** — Land Registry OpenData (Price Paid dataset)
+3. **Distance from coast** — computed from coastline geometry
+4. **Crime rates** — data.police.uk open data
+5. **School Ofsted ratings** — DfE API / Ofsted data feeds
+
+### Priority 2: Weighted cost function + optimiser
+
+- User-configurable weights for each layer (commute time, house price, sunshine, etc.)
+- Compute a weighted score per grid cell within the selected isochrone
+- Highlight hotspots of optimum scores on the map
+- "Best places to live within 60 min of King's Cross" ranked list
+
+### Priority 3: Tube / walking / cycling support
+
+- **Tube/Overground**: TfL Journey Planner API for zones 3–6 catchment areas
+- **Walking to station**: ORS walking profile (`foot-walking`) as alternative to drive
+- **Cycling**: ORS cycling profile for stations within ~5km
+
+### Lower priority
+
 - **Mobile layout**: Responsive controls panel (drawer instead of overlay)
-- **Saved searches**: User accounts + saved combinations (needs auth — see existing site auth pattern)
+- **Real-time mode**: Live departures via Transport API (single-query, not map-wide)
+- **Saved searches**: User accounts + saved combinations (needs auth)

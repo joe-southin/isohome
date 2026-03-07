@@ -271,6 +271,79 @@ class TestComputeIsochrone:
         assert result["features"][0]["geometry"]["type"] == "MultiPolygon"
 
 
+class TestRealisticScenarios:
+    """Realistic test cases based on known commute patterns."""
+
+    def test_clophill_reachable_from_stp_within_60min(self):
+        """Clophill, Bedfordshire: ~10 min drive to Flitwick (FLT),
+        41 min train to St Pancras = 51 min total, within 60 min budget."""
+        journey_times = [
+            {"terminus_crs": "STP", "remote_crs": "FLT", "journey_minutes": 41,
+             "remote_name": "Flitwick", "remote_lat": 52.003, "remote_lon": -0.497},
+        ]
+        result = filter_reachable_stations(journey_times, "STP", 60)
+        assert len(result) == 1
+        assert result[0]["remote_crs"] == "FLT"
+        assert result[0]["drive_budget"] == 19  # 60 - 41
+
+    def test_clophill_unreachable_from_stp_within_30min(self):
+        """Clophill to STP takes 51 min, so 30 min budget is too short."""
+        journey_times = [
+            {"terminus_crs": "STP", "remote_crs": "FLT", "journey_minutes": 41,
+             "remote_name": "Flitwick", "remote_lat": 52.003, "remote_lon": -0.497},
+        ]
+        result = filter_reachable_stations(journey_times, "STP", 30)
+        assert len(result) == 0
+
+    @patch("scripts.precompute.compute_isochrones.fetch_ors_isochrone")
+    @patch("scripts.precompute.compute_isochrones.time.sleep")
+    def test_clophill_inside_stp_60min_isochrone(self, mock_sleep, mock_ors):
+        """Clophill (~52.03, -0.44) should be inside the drive polygon from Flitwick
+        with a 19-min drive budget (60 - 41 = 19)."""
+        from shapely.geometry import Point
+
+        # Create a polygon around Flitwick that covers 19 min drive
+        # Flitwick is at (-0.497, 52.003); Clophill is ~5km east at (-0.44, 52.03)
+        clophill_polygon = {
+            "type": "Polygon",
+            "coordinates": [[
+                [-0.6, 51.9], [-0.3, 51.9], [-0.3, 52.1], [-0.6, 52.1], [-0.6, 51.9]
+            ]],
+        }
+        mock_ors.return_value = clophill_polygon
+
+        journey_times = [
+            {"terminus_crs": "STP", "remote_crs": "FLT", "journey_minutes": 41,
+             "remote_name": "Flitwick", "remote_lat": 52.003, "remote_lon": -0.497},
+        ]
+
+        result = compute_isochrone("STP", "St Pancras International", 60, journey_times, "key")
+        merged_geom = shape(result["features"][0]["geometry"])
+
+        clophill = Point(-0.44, 52.03)
+        assert merged_geom.contains(clophill), "Clophill should be inside 60-min STP isochrone"
+
+    def test_bedford_reachable_from_kgx_within_60min(self):
+        """Bedford (BDM): 44 min train to KGX, within 60 min budget."""
+        journey_times = [
+            {"terminus_crs": "KGX", "remote_crs": "BDM", "journey_minutes": 44,
+             "remote_name": "Bedford", "remote_lat": 52.136, "remote_lon": -0.480},
+        ]
+        result = filter_reachable_stations(journey_times, "KGX", 60)
+        assert len(result) == 1
+        assert result[0]["drive_budget"] == 16
+
+    def test_cambridge_reachable_from_kgx_within_60min(self):
+        """Cambridge (CBG): 48 min train to KGX, within 60 min budget."""
+        journey_times = [
+            {"terminus_crs": "KGX", "remote_crs": "CBG", "journey_minutes": 48,
+             "remote_name": "Cambridge", "remote_lat": 52.194, "remote_lon": 0.137},
+        ]
+        result = filter_reachable_stations(journey_times, "KGX", 60)
+        assert len(result) == 1
+        assert result[0]["drive_budget"] == 12
+
+
 class TestSaveGeojson:
     """Tests for save_geojson function."""
 

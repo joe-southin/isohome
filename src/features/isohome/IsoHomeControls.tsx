@@ -3,8 +3,8 @@ import { LONDON_TERMINI, TIME_BUCKETS } from './config';
 import { formatMinutes } from './utils/formatTime';
 
 interface IsoHomeControlsProps {
-  selectedTerminus: string;
-  onTerminusChange: (crs: string) => void;
+  selectedTermini: string[];
+  onTerminiChange: (crs: string, selected: boolean) => void;
   selectedMinutesIndex: number;
   onMinutesChange: (index: number) => void;
   showStations: boolean;
@@ -16,8 +16,8 @@ interface IsoHomeControlsProps {
 }
 
 export function IsoHomeControls({
-  selectedTerminus,
-  onTerminusChange,
+  selectedTermini,
+  onTerminiChange,
   selectedMinutesIndex,
   onMinutesChange,
   showStations,
@@ -28,26 +28,25 @@ export function IsoHomeControls({
   error,
 }: IsoHomeControlsProps) {
   return (
-    <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-lg p-4 w-72 space-y-4">
+    <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-lg p-4 w-72 space-y-4 max-h-[90vh] overflow-y-auto">
       <h2 className="text-lg font-semibold">IsoHome</h2>
 
-      <div className="space-y-2">
-        <label htmlFor="terminus-select" className="text-sm font-medium">
-          London Terminus
-        </label>
-        <select
-          id="terminus-select"
-          value={selectedTerminus}
-          onChange={(e) => onTerminusChange(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-        >
+      <fieldset className="space-y-1">
+        <legend className="text-sm font-medium mb-1">London Termini</legend>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
           {LONDON_TERMINI.map((t) => (
-            <option key={t.crs} value={t.crs}>
+            <label key={t.crs} className="flex items-center gap-1.5 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedTermini.includes(t.crs)}
+                onChange={(e) => onTerminiChange(t.crs, e.target.checked)}
+                aria-label={t.name}
+              />
               {t.name}
-            </option>
+            </label>
           ))}
-        </select>
-      </div>
+        </div>
+      </fieldset>
 
       <div className="space-y-2">
         <label htmlFor="time-slider" className="text-sm font-medium">

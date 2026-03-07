@@ -11,8 +11,8 @@ const mockMapInstance = {
   remove: vi.fn(),
   addSource: vi.fn(),
   addLayer: vi.fn(),
-  getSource: vi.fn(() => undefined),
-  getLayer: vi.fn(() => undefined),
+  getSource: vi.fn((_name?: string) => undefined) as ReturnType<typeof vi.fn>,
+  getLayer: vi.fn((_name?: string) => undefined) as ReturnType<typeof vi.fn>,
   setLayoutProperty: vi.fn(),
   addControl: vi.fn(),
   queryRenderedFeatures: vi.fn(() => []),
@@ -82,6 +82,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={false}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     expect(screen.getByTestId('map-container')).toBeInTheDocument();
@@ -98,6 +100,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={false}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     expect((mockMapInstance as any)._opts.center).toEqual([-2.5, 54.0]);
@@ -116,6 +120,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={true}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     expect(screen.getByTestId('map-container').style.opacity).toBe('0.5');
@@ -132,6 +138,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={false}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     expect(screen.getByTestId('map-container').style.opacity).toBe('1');
@@ -148,6 +156,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={false}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     act(() => { loadCallback?.(); });
@@ -167,6 +177,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={false}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     act(() => { loadCallback?.(); });
@@ -188,6 +200,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={false}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     act(() => { loadCallback?.(); });
@@ -205,6 +219,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={false}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     act(() => { loadCallback?.(); });
@@ -227,6 +243,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={false}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     act(() => { loadCallback?.(); });
@@ -244,6 +262,8 @@ describe('IsoHomeMap', () => {
         showRouteInfo={false}
         timeBudget={60}
         isLoading={false}
+        costScores={[]}
+        colormap="viridis"
       />,
     );
     unmount();

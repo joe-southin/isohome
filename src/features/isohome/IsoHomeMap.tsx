@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { GeoJSON } from 'geojson';
+import type { CostPoint, Colormap } from './types';
+import { COLORMAP_EXPRESSIONS } from './colormaps';
 
 interface StationInfo {
   name: string;
@@ -32,6 +34,8 @@ interface IsoHomeMapProps {
   showRouteInfo: boolean;
   timeBudget: number;
   isLoading: boolean;
+  costScores: CostPoint[];
+  colormap: Colormap;
 }
 
 function findNearestStation(
@@ -128,6 +132,8 @@ export function IsoHomeMap({
   showRouteInfo,
   timeBudget,
   isLoading,
+  costScores,
+  colormap,
 }: IsoHomeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -177,6 +183,35 @@ export function IsoHomeMap({
       map.addLayer({ id: 'isochrone-fill', type: 'fill', source: 'isochrone-source', paint: { 'fill-color': '#ef4444', 'fill-opacity': 0.25 } });
       map.addLayer({ id: 'isochrone-outline', type: 'line', source: 'isochrone-source', paint: { 'line-color': '#dc2626', 'line-width': 1.5 } });
     }
+
+    // Ensure cost heatmap source/layer exists (inserted below isochrone-fill)
+    if (!map.getSource('cost-heatmap-source')) {
+      map.addSource('cost-heatmap-source', { type: 'geojson', data: makeEmptyFC() });
+      map.addLayer({
+        id: 'cost-heatmap-layer',
+        type: 'heatmap',
+        source: 'cost-heatmap-source',
+        paint: {
+          'heatmap-weight': ['get', 'score'],
+          'heatmap-radius': [
+            'interpolate', ['exponential', 2], ['zoom'],
+            5, 20,
+            8, 60,
+            10, 120,
+            12, 250,
+          ],
+          'heatmap-opacity': 0.75,
+          'heatmap-intensity': [
+            'interpolate', ['linear'], ['zoom'],
+            5, 1.5,
+            8, 1,
+            10, 0.8,
+            12, 0.6,
+          ],
+          'heatmap-color': COLORMAP_EXPRESSIONS['viridis'],
+        },
+      }, 'isochrone-fill');
+    }
   }, [isochroneData, mapLoaded]);
 
   // Stations layer
@@ -200,6 +235,33 @@ export function IsoHomeMap({
     }
     map.setLayoutProperty('rail-lines-layer', 'visibility', showRailLines ? 'visible' : 'none');
   }, [railLinesData, showRailLines, mapLoaded]);
+
+  // Update cost heatmap data
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    const source = map.getSource('cost-heatmap-source') as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    const fc: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: costScores.map(p => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+        properties: { score: p.score },
+      })),
+    };
+    source.setData(fc);
+  }, [costScores, mapLoaded]);
+
+  // Update colormap
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    if (map.getLayer('cost-heatmap-layer')) {
+      map.setPaintProperty('cost-heatmap-layer', 'heatmap-color', COLORMAP_EXPRESSIONS[colormap]);
+    }
+  }, [colormap, mapLoaded]);
 
   // Clear all route display elements
   const clearRouteDisplay = useCallback(() => {

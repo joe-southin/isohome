@@ -3,7 +3,9 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { IsoHomeControls } from './IsoHomeControls';
 import { IsoHomeMap } from './IsoHomeMap';
 import { TIME_BUCKETS } from './config';
-import type { FeatureCollection } from 'geojson';
+import { generateSampleGrid, computeCostField } from './utils/costField';
+import type { FeatureCollection, Polygon, MultiPolygon } from 'geojson';
+import type { LayerWeight, CostPoint, Colormap } from './types';
 
 async function fetchIsochrone(crs: string, minutes: number): Promise<FeatureCollection> {
   const res = await fetch(`/api/isochrone/${crs}/${minutes}`);
@@ -20,6 +22,11 @@ export function IsoHomePage() {
   const [showStations, setShowStations] = useState(false);
   const [showRailLines, setShowRailLines] = useState(false);
   const [showRouteInfo, setShowRouteInfo] = useState(true);
+  const [layerWeights, setLayerWeights] = useState<LayerWeight[]>([
+    { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true },
+    { id: 'house_price', label: 'House price', weight: 5, enabled: true, higherIsBetter: false },
+  ]);
+  const [colormap, setColormap] = useState<Colormap>('viridis');
 
   const selectedMinutes = TIME_BUCKETS[selectedMinutesIndex];
 
@@ -54,6 +61,36 @@ export function IsoHomePage() {
     staleTime: Infinity,
   });
 
+  const { data: sunshineData } = useQuery({
+    queryKey: ['static', 'sunshine'],
+    queryFn: () => fetch('/api/static/sunshine').then((r) => r.json()),
+    staleTime: Infinity,
+  });
+
+  const { data: housePriceData } = useQuery({
+    queryKey: ['static', 'house-prices'],
+    queryFn: () => fetch('/api/static/house-prices').then((r) => r.json()),
+    staleTime: Infinity,
+  });
+
+  const costScores = useMemo<CostPoint[]>(() => {
+    if (!mergedIsochrone || !sunshineData || !housePriceData) return [];
+    const activeWeights = layerWeights.filter((l) => l.enabled && l.weight > 0);
+    if (activeWeights.length === 0) return [];
+    try {
+      const points = generateSampleGrid(
+        mergedIsochrone as FeatureCollection<Polygon | MultiPolygon>,
+      );
+      return computeCostField(points, activeWeights, {
+        sunshine: sunshineData,
+        house_price: housePriceData,
+      });
+    } catch (e) {
+      console.error('computeCostField failed:', e);
+      return [];
+    }
+  }, [mergedIsochrone, sunshineData, housePriceData, layerWeights]);
+
   const handleTerminiChange = (crs: string, selected: boolean) => {
     setSelectedTermini((prev) => {
       if (selected) return [...prev, crs];
@@ -77,6 +114,10 @@ export function IsoHomePage() {
         onShowRouteInfoChange={setShowRouteInfo}
         isLoading={isoLoading}
         error={isoError?.message ?? null}
+        layerWeights={layerWeights}
+        onLayerWeightsChange={setLayerWeights}
+        colormap={colormap}
+        onColormapChange={setColormap}
       />
       <IsoHomeMap
         isochroneData={mergedIsochrone}
@@ -87,6 +128,8 @@ export function IsoHomePage() {
         showRouteInfo={showRouteInfo}
         timeBudget={selectedMinutes}
         isLoading={isoLoading}
+        costScores={costScores}
+        colormap={colormap}
       />
     </div>
   );

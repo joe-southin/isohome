@@ -84,6 +84,16 @@ export default {
       return handleStatic('rail-lines', env);
     }
 
+    // GET /api/static/sunshine
+    if (url.pathname === '/api/static/sunshine') {
+      return handleStatic('sunshine', env);
+    }
+
+    // GET /api/static/house-prices
+    if (url.pathname === '/api/static/house-prices') {
+      return handleStatic('house-prices', env);
+    }
+
     // Non-API routes: let the assets binding handle it (serves index.html for SPA)
     return env.ASSETS.fetch(request);
   },

@@ -16,6 +16,13 @@ const defaultProps = {
   onShowRouteInfoChange: vi.fn(),
   isLoading: false,
   error: null,
+  layerWeights: [
+    { id: 'sunshine' as const, label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true },
+    { id: 'house_price' as const, label: 'House price', weight: 5, enabled: true, higherIsBetter: false },
+  ],
+  onLayerWeightsChange: vi.fn(),
+  colormap: 'viridis' as const,
+  onColormapChange: vi.fn(),
 };
 
 describe('IsoHomeControls', () => {
@@ -106,5 +113,45 @@ describe('IsoHomeControls', () => {
   it('does not show error alert when error is null', () => {
     render(<IsoHomeControls {...defaultProps} error={null} />);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('renders the desirability layers button', () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    expect(screen.getByText('Desirability layers')).toBeInTheDocument();
+  });
+
+  it('starts with desirability panel collapsed', () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    const button = screen.getByText('Desirability layers');
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Sunshine weight')).not.toBeInTheDocument();
+  });
+
+  it('expands desirability panel on click', async () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    await userEvent.click(screen.getByText('Desirability layers'));
+    expect(screen.getByText('Desirability layers')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText('Sunshine weight')).toBeInTheDocument();
+    expect(screen.getByLabelText('House price weight')).toBeInTheDocument();
+  });
+
+  it('calls onLayerWeightsChange when toggling a layer checkbox', async () => {
+    const onLayerWeightsChange = vi.fn();
+    render(<IsoHomeControls {...defaultProps} onLayerWeightsChange={onLayerWeightsChange} />);
+    await userEvent.click(screen.getByText('Desirability layers'));
+    const checkboxes = screen.getAllByRole('checkbox');
+    const sunshineCheckbox = checkboxes.find(
+      (cb) => cb.closest('label')?.textContent?.includes('Sunshine'),
+    );
+    expect(sunshineCheckbox).toBeDefined();
+    await userEvent.click(sunshineCheckbox!);
+    expect(onLayerWeightsChange).toHaveBeenCalled();
+  });
+
+  it('shows colormap selector when panel is open', async () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    await userEvent.click(screen.getByText('Desirability layers'));
+    expect(screen.getByText('Colormap')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Viridis')).toBeInTheDocument();
   });
 });

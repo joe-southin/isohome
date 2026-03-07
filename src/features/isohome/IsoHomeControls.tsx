@@ -1,6 +1,8 @@
-import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Loader2 } from 'lucide-react';
 import { LONDON_TERMINI, TIME_BUCKETS } from './config';
 import { formatMinutes } from './utils/formatTime';
+import type { LayerWeight, Colormap } from './types';
 
 interface IsoHomeControlsProps {
   selectedTermini: string[];
@@ -15,6 +17,10 @@ interface IsoHomeControlsProps {
   onShowRouteInfoChange: (show: boolean) => void;
   isLoading: boolean;
   error: string | null;
+  layerWeights: LayerWeight[];
+  onLayerWeightsChange: (weights: LayerWeight[]) => void;
+  colormap: Colormap;
+  onColormapChange: (c: Colormap) => void;
 }
 
 export function IsoHomeControls({
@@ -30,7 +36,19 @@ export function IsoHomeControls({
   onShowRouteInfoChange,
   isLoading,
   error,
+  layerWeights,
+  onLayerWeightsChange,
+  colormap,
+  onColormapChange,
 }: IsoHomeControlsProps) {
+  const [layerPanelOpen, setLayerPanelOpen] = useState(false);
+
+  const updateLayer = (id: string, update: Partial<LayerWeight>) => {
+    onLayerWeightsChange(
+      layerWeights.map((l) => (l.id === id ? { ...l, ...update } : l)),
+    );
+  };
+
   return (
     <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-lg p-4 w-72 space-y-4 max-h-[90vh] overflow-y-auto">
       <h2 className="text-lg font-semibold">IsoHome</h2>
@@ -103,6 +121,66 @@ export function IsoHomeControls({
           />
           Show route on hover
         </label>
+      </div>
+
+      <div>
+        <button
+          onClick={() => setLayerPanelOpen((o) => !o)}
+          className="flex items-center justify-between w-full text-sm font-medium py-1"
+          aria-expanded={layerPanelOpen}
+        >
+          Desirability layers
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${layerPanelOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        {layerPanelOpen && (
+          <div className="space-y-3 mt-2">
+            {layerWeights.map((layer) => (
+              <div key={layer.id} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={layer.enabled}
+                      onChange={(e) =>
+                        updateLayer(layer.id, { enabled: e.target.checked })
+                      }
+                    />
+                    {layer.label}
+                  </label>
+                  <span className="text-gray-500 tabular-nums">{layer.weight}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={10}
+                  step={1}
+                  value={layer.weight}
+                  disabled={!layer.enabled}
+                  onChange={(e) =>
+                    updateLayer(layer.id, { weight: Number(e.target.value) })
+                  }
+                  className="w-full"
+                  aria-label={`${layer.label} weight`}
+                />
+              </div>
+            ))}
+
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-600">Colormap</span>
+              <select
+                value={colormap}
+                onChange={(e) => onColormapChange(e.target.value as Colormap)}
+                className="text-xs border rounded px-1 py-0.5"
+              >
+                <option value="viridis">Viridis</option>
+                <option value="jet">Jet</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {isLoading && (

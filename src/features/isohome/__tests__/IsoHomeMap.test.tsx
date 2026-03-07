@@ -80,6 +80,7 @@ describe('IsoHomeMap', () => {
         showStations={false}
         showRailLines={false}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={false}
       />,
     );
@@ -95,6 +96,7 @@ describe('IsoHomeMap', () => {
         showStations={false}
         showRailLines={false}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={false}
       />,
     );
@@ -112,6 +114,7 @@ describe('IsoHomeMap', () => {
         showStations={false}
         showRailLines={false}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={true}
       />,
     );
@@ -127,6 +130,7 @@ describe('IsoHomeMap', () => {
         showStations={false}
         showRailLines={false}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={false}
       />,
     );
@@ -142,6 +146,7 @@ describe('IsoHomeMap', () => {
         showStations={false}
         showRailLines={false}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={false}
       />,
     );
@@ -160,6 +165,7 @@ describe('IsoHomeMap', () => {
         showStations={true}
         showRailLines={false}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={false}
       />,
     );
@@ -180,6 +186,7 @@ describe('IsoHomeMap', () => {
         showStations={false}
         showRailLines={false}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={false}
       />,
     );
@@ -196,6 +203,7 @@ describe('IsoHomeMap', () => {
         showStations={false}
         showRailLines={true}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={false}
       />,
     );
@@ -217,6 +225,7 @@ describe('IsoHomeMap', () => {
         showStations={false}
         showRailLines={false}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={false}
       />,
     );
@@ -233,6 +242,7 @@ describe('IsoHomeMap', () => {
         showStations={false}
         showRailLines={false}
         showRouteInfo={false}
+        timeBudget={60}
         isLoading={false}
       />,
     );

@@ -85,6 +85,7 @@ export function IsoHomePage() {
         showStations={showStations}
         showRailLines={showRailLines}
         showRouteInfo={showRouteInfo}
+        timeBudget={selectedMinutes}
         isLoading={isoLoading}
       />
     </div>

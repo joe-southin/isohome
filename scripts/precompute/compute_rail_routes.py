@@ -12,7 +12,7 @@ import heapq
 import json
 import math
 import os
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 from typing import Optional
 
@@ -88,20 +88,48 @@ def build_rail_graph(rail_geojson_path: str) -> dict:
                 adjacency[n1].append((n2, seg_weight, seg_coords))
                 adjacency[n2].append((n1, seg_weight, list(reversed(seg_coords))))
 
-    return dict(adjacency)
+    adj = dict(adjacency)
+    adj["_main_component"] = _find_main_component(adj)
+    return adj
+
+
+def _find_main_component(adjacency: dict) -> set:
+    """Find the largest connected component in the graph."""
+    all_nodes = set(adjacency.keys())
+    best_component: set = set()
+    visited_all: set = set()
+
+    for node in all_nodes:
+        if node in visited_all:
+            continue
+        component: set = {node}
+        queue = deque([node])
+        while queue:
+            n = queue.popleft()
+            for nb, _, _ in adjacency.get(n, []):
+                if nb not in component:
+                    component.add(nb)
+                    queue.append(nb)
+        visited_all |= component
+        if len(component) > len(best_component):
+            best_component = component
+
+    return best_component
 
 
 def find_nearest_node(
     adjacency: dict, lon: float, lat: float
 ) -> Optional[tuple[float, float]]:
-    """Find the nearest graph node to a given point."""
+    """Find the nearest graph node to a given point, preferring the main component."""
+    main_component = adjacency.get("_main_component", set())
+
     target = _round_coord(lon, lat)
-    if target in adjacency:
+    if target in adjacency and target in main_component:
         return target
 
     best = None
     best_dist = float("inf")
-    for node in adjacency:
+    for node in (main_component if main_component else adjacency):
         d = _haversine_deg(lon, lat, node[0], node[1])
         if d < best_dist:
             best_dist = d

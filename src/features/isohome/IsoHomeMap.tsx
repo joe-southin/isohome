@@ -30,6 +30,7 @@ interface IsoHomeMapProps {
   showStations: boolean;
   showRailLines: boolean;
   showRouteInfo: boolean;
+  timeBudget: number;
   isLoading: boolean;
 }
 
@@ -113,6 +114,11 @@ function makeLineFC(coords: number[][]): GeoJSON.FeatureCollection {
   };
 }
 
+interface RouteInfo {
+  station: StationInfo;
+  driveMinutes: number | null;
+}
+
 export function IsoHomeMap({
   isochroneData,
   stationsData,
@@ -120,14 +126,15 @@ export function IsoHomeMap({
   showStations,
   showRailLines,
   showRouteInfo,
+  timeBudget,
   isLoading,
 }: IsoHomeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const popupRef = useRef<mapboxgl.Popup | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -146,7 +153,6 @@ export function IsoHomeMap({
 
     return () => {
       setMapLoaded(false);
-      popupRef.current?.remove();
       map.remove();
     };
   }, []);
@@ -199,8 +205,7 @@ export function IsoHomeMap({
   const clearRouteDisplay = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
-    popupRef.current?.remove();
-    popupRef.current = null;
+    setRouteInfo(null);
     abortRef.current?.abort();
     abortRef.current = null;
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
@@ -235,39 +240,6 @@ export function IsoHomeMap({
 
     let lastFetchKey = '';
 
-    function updatePopup(
-      map: mapboxgl.Map,
-      lngLat: mapboxgl.LngLat,
-      station: StationInfo,
-      driveMinutes: number | null,
-    ) {
-      popupRef.current?.remove();
-
-      const driveText = driveMinutes !== null
-        ? `~${driveMinutes} min`
-        : `≤${station.drive_budget} min`;
-      const totalText = driveMinutes !== null
-        ? `~${driveMinutes + station.journey_minutes} min`
-        : `≤${station.drive_budget + station.journey_minutes} min`;
-
-      popupRef.current = new mapboxgl.Popup({
-        closeButton: false,
-        closeOnClick: false,
-        offset: 12,
-        className: 'route-info-popup',
-      })
-        .setLngLat(lngLat)
-        .setHTML(
-          `<div style="font-size:13px;line-height:1.4">
-            <div style="font-weight:600;margin-bottom:4px">Route via ${station.name}</div>
-            <div style="color:#16a34a">🚗 Drive to ${station.name}: ${driveText}</div>
-            <div style="color:#2563eb">🚆 Train to ${station.terminus_name}: ${station.journey_minutes} min</div>
-            <div style="border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:600">Total: ${totalText}</div>
-          </div>`,
-        )
-        .addTo(map);
-    }
-
     function onMouseMove(e: mapboxgl.MapMouseEvent) {
       if (!showRouteInfo || !map) return;
 
@@ -284,8 +256,8 @@ export function IsoHomeMap({
       const station = findNearestStation(e.lngLat.lng, e.lngLat.lat, isochroneData);
       if (!station) { clearRouteDisplay(); lastFetchKey = ''; return; }
 
-      // Show popup with static drive budget initially
-      updatePopup(map, e.lngLat, station, null);
+      // Show route info with static drive budget initially
+      setRouteInfo({ station, driveMinutes: null });
 
       // Train leg — precomputed rail route
       const trainCoords = station.rail_route ??
@@ -307,7 +279,6 @@ export function IsoHomeMap({
 
       const hoverLng = e.lngLat.lng;
       const hoverLat = e.lngLat.lat;
-      const hoverLngLat = e.lngLat;
       const capturedStation = station;
 
       // Debounce: fetch road route after cursor stops for 150ms
@@ -340,8 +311,8 @@ export function IsoHomeMap({
             );
           }
 
-          // Update popup with actual drive duration
-          updatePopup(map, hoverLngLat, capturedStation, result.duration_minutes);
+          // Update info panel with actual drive duration
+          setRouteInfo({ station: capturedStation, driveMinutes: result.duration_minutes });
         }
       }, 150);
     }
@@ -362,12 +333,45 @@ export function IsoHomeMap({
     };
   }, [showRouteInfo, mapLoaded, isochroneData, clearRouteDisplay]);
 
+  const driveText = routeInfo
+    ? routeInfo.driveMinutes !== null
+      ? `~${routeInfo.driveMinutes} min`
+      : `≤${routeInfo.station.drive_budget} min`
+    : '';
+  const totalMinutes = routeInfo
+    ? routeInfo.driveMinutes !== null
+      ? routeInfo.driveMinutes + routeInfo.station.journey_minutes
+      : null
+    : null;
+  const totalText = routeInfo
+    ? totalMinutes !== null
+      ? `~${totalMinutes} min`
+      : `≤${routeInfo.station.drive_budget + routeInfo.station.journey_minutes} min`
+    : '';
+  const overBudget = totalMinutes !== null && totalMinutes > timeBudget;
+
   return (
-    <div
-      ref={containerRef}
-      data-testid="map-container"
-      className="w-full h-full"
-      style={{ opacity: isLoading ? 0.5 : 1, transition: 'opacity 0.2s' }}
-    />
+    <div className="relative w-full h-full">
+      <div
+        ref={containerRef}
+        data-testid="map-container"
+        className="w-full h-full"
+        style={{ opacity: isLoading ? 0.5 : 1, transition: 'opacity 0.2s' }}
+      />
+      {routeInfo && (
+        <div
+          data-testid="route-info-panel"
+          className="absolute bottom-4 right-4 bg-white rounded-lg shadow-lg px-4 py-3 pointer-events-none"
+          style={{ maxWidth: 280, fontSize: 13, lineHeight: 1.4, zIndex: 10 }}
+        >
+          <div className="font-semibold mb-1">Route via {routeInfo.station.name}</div>
+          <div style={{ color: '#16a34a' }}>🚗 Drive to {routeInfo.station.name}: {driveText}</div>
+          <div style={{ color: '#2563eb' }}>🚆 Train to {routeInfo.station.terminus_name}: {routeInfo.station.journey_minutes} min</div>
+          <div className="border-t border-gray-200 mt-1 pt-1 font-semibold" style={overBudget ? { color: '#dc2626' } : undefined}>
+            Total: {totalText}{overBudget ? ` (exceeds ${timeBudget} min)` : ''}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -12,6 +12,8 @@ const defaultProps = {
   onShowStationsChange: vi.fn(),
   showRailLines: false,
   onShowRailLinesChange: vi.fn(),
+  showRouteInfo: true,
+  onShowRouteInfoChange: vi.fn(),
   isLoading: false,
   error: null,
 };
@@ -70,6 +72,11 @@ describe('IsoHomeControls', () => {
   it('renders rail lines toggle switch', () => {
     render(<IsoHomeControls {...defaultProps} />);
     expect(screen.getByLabelText('Show rail lines')).toBeInTheDocument();
+  });
+
+  it('renders route info toggle switch', () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    expect(screen.getByLabelText('Show route on hover')).toBeInTheDocument();
   });
 
   it('calls onShowStationsChange when toggling', async () => {

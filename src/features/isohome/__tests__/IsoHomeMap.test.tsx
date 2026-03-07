@@ -7,6 +7,7 @@ const mockMapInstance = {
   on: vi.fn((event: string, cb: () => void) => {
     if (event === 'load') loadCallback = cb;
   }),
+  off: vi.fn(),
   remove: vi.fn(),
   addSource: vi.fn(),
   addLayer: vi.fn(),
@@ -14,6 +15,8 @@ const mockMapInstance = {
   getLayer: vi.fn(() => undefined),
   setLayoutProperty: vi.fn(),
   addControl: vi.fn(),
+  queryRenderedFeatures: vi.fn(() => []),
+  getCanvas: vi.fn(() => ({ style: {} })),
 };
 
 vi.mock('mapbox-gl', () => ({
@@ -24,6 +27,9 @@ vi.mock('mapbox-gl', () => ({
     },
     NavigationControl: function () {
       return {};
+    },
+    Popup: function () {
+      return { setLngLat: vi.fn().mockReturnThis(), setHTML: vi.fn().mockReturnThis(), addTo: vi.fn().mockReturnThis(), remove: vi.fn() };
     },
   },
 }));
@@ -73,6 +79,7 @@ describe('IsoHomeMap', () => {
         railLinesData={undefined}
         showStations={false}
         showRailLines={false}
+        showRouteInfo={false}
         isLoading={false}
       />,
     );
@@ -87,6 +94,7 @@ describe('IsoHomeMap', () => {
         railLinesData={undefined}
         showStations={false}
         showRailLines={false}
+        showRouteInfo={false}
         isLoading={false}
       />,
     );
@@ -103,6 +111,7 @@ describe('IsoHomeMap', () => {
         railLinesData={undefined}
         showStations={false}
         showRailLines={false}
+        showRouteInfo={false}
         isLoading={true}
       />,
     );
@@ -117,6 +126,7 @@ describe('IsoHomeMap', () => {
         railLinesData={undefined}
         showStations={false}
         showRailLines={false}
+        showRouteInfo={false}
         isLoading={false}
       />,
     );
@@ -131,6 +141,7 @@ describe('IsoHomeMap', () => {
         railLinesData={undefined}
         showStations={false}
         showRailLines={false}
+        showRouteInfo={false}
         isLoading={false}
       />,
     );
@@ -148,6 +159,7 @@ describe('IsoHomeMap', () => {
         railLinesData={undefined}
         showStations={true}
         showRailLines={false}
+        showRouteInfo={false}
         isLoading={false}
       />,
     );
@@ -167,6 +179,7 @@ describe('IsoHomeMap', () => {
         railLinesData={undefined}
         showStations={false}
         showRailLines={false}
+        showRouteInfo={false}
         isLoading={false}
       />,
     );
@@ -182,6 +195,7 @@ describe('IsoHomeMap', () => {
         railLinesData={sampleRailLines}
         showStations={false}
         showRailLines={true}
+        showRouteInfo={false}
         isLoading={false}
       />,
     );
@@ -202,6 +216,7 @@ describe('IsoHomeMap', () => {
         railLinesData={undefined}
         showStations={false}
         showRailLines={false}
+        showRouteInfo={false}
         isLoading={false}
       />,
     );
@@ -217,6 +232,7 @@ describe('IsoHomeMap', () => {
         railLinesData={undefined}
         showStations={false}
         showRailLines={false}
+        showRouteInfo={false}
         isLoading={false}
       />,
     );

@@ -11,6 +11,8 @@ interface IsoHomeControlsProps {
   onShowStationsChange: (show: boolean) => void;
   showRailLines: boolean;
   onShowRailLinesChange: (show: boolean) => void;
+  showRouteInfo: boolean;
+  onShowRouteInfoChange: (show: boolean) => void;
   isLoading: boolean;
   error: string | null;
 }
@@ -24,6 +26,8 @@ export function IsoHomeControls({
   onShowStationsChange,
   showRailLines,
   onShowRailLinesChange,
+  showRouteInfo,
+  onShowRouteInfoChange,
   isLoading,
   error,
 }: IsoHomeControlsProps) {
@@ -88,6 +92,16 @@ export function IsoHomeControls({
             aria-label="Show rail lines"
           />
           Show rail lines
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showRouteInfo}
+            onChange={(e) => onShowRouteInfoChange(e.target.checked)}
+            role="switch"
+            aria-label="Show route on hover"
+          />
+          Show route on hover
         </label>
       </div>
 

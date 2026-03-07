@@ -19,6 +19,7 @@ export function IsoHomePage() {
   const [selectedMinutesIndex, setSelectedMinutesIndex] = useState(2); // 60 min
   const [showStations, setShowStations] = useState(false);
   const [showRailLines, setShowRailLines] = useState(false);
+  const [showRouteInfo, setShowRouteInfo] = useState(true);
 
   const selectedMinutes = TIME_BUCKETS[selectedMinutesIndex];
 
@@ -72,6 +73,8 @@ export function IsoHomePage() {
         onShowStationsChange={setShowStations}
         showRailLines={showRailLines}
         onShowRailLinesChange={setShowRailLines}
+        showRouteInfo={showRouteInfo}
+        onShowRouteInfoChange={setShowRouteInfo}
         isLoading={isoLoading}
         error={isoError?.message ?? null}
       />
@@ -81,6 +84,7 @@ export function IsoHomePage() {
         railLinesData={railLinesData}
         showStations={showStations}
         showRailLines={showRailLines}
+        showRouteInfo={showRouteInfo}
         isLoading={isoLoading}
       />
     </div>

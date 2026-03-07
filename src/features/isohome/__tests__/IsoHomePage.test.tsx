@@ -9,6 +9,7 @@ vi.mock('mapbox-gl', () => ({
     Map: function () {
       return {
         on: vi.fn(),
+        off: vi.fn(),
         remove: vi.fn(),
         addSource: vi.fn(),
         addLayer: vi.fn(),
@@ -16,10 +17,15 @@ vi.mock('mapbox-gl', () => ({
         getLayer: vi.fn(),
         setLayoutProperty: vi.fn(),
         addControl: vi.fn(),
+        queryRenderedFeatures: vi.fn(() => []),
+        getCanvas: vi.fn(() => ({ style: {} })),
       };
     },
     NavigationControl: function () {
       return {};
+    },
+    Popup: function () {
+      return { setLngLat: vi.fn().mockReturnThis(), setHTML: vi.fn().mockReturnThis(), addTo: vi.fn().mockReturnThis(), remove: vi.fn() };
     },
   },
 }));

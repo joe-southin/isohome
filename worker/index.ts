@@ -2,7 +2,7 @@ export interface Env {
   ISOHOME_BUCKET: R2Bucket;
 }
 
-const VALID_CRS = ['KGX', 'PAD', 'WAT', 'VIC', 'LST', 'BFR', 'CST', 'CHX', 'EUS', 'MYB'];
+const VALID_CRS = ['KGX', 'PAD', 'WAT', 'VIC', 'LST', 'BFR', 'CST', 'CHX', 'EUS', 'MYB', 'STP'];
 const VALID_BUCKETS = ['30', '45', '60', '75', '90', '120'];
 
 const CORS_HEADERS = {

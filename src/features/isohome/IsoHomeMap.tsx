@@ -17,6 +17,12 @@ interface StationInfo {
   rail_route: number[][] | null;
 }
 
+interface DriveRouteResult {
+  coordinates: number[][];
+  duration_minutes: number;
+  snapped_start: [number, number];
+}
+
 interface IsoHomeMapProps {
   isochroneData: GeoJSON | undefined;
   stationsData: GeoJSON | undefined;
@@ -68,23 +74,43 @@ function findNearestStation(
   return nearest;
 }
 
-/** Fetch a driving route from Mapbox Directions API. */
 async function fetchDriveRoute(
   fromLng: number,
   fromLat: number,
   toLng: number,
   toLat: number,
   token: string,
-): Promise<number[][] | null> {
+  signal: AbortSignal,
+): Promise<DriveRouteResult | null> {
   try {
     const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${fromLng},${fromLat};${toLng},${toLat}?geometries=geojson&overview=full&access_token=${token}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.routes?.[0]?.geometry?.coordinates ?? null;
+    const route = data.routes?.[0];
+    if (!route?.geometry?.coordinates) return null;
+
+    const snappedStart = data.waypoints?.[0]?.location as [number, number] | undefined;
+
+    return {
+      coordinates: route.geometry.coordinates,
+      duration_minutes: Math.round(route.duration / 60),
+      snapped_start: snappedStart ?? [fromLng, fromLat],
+    };
   } catch {
     return null;
   }
+}
+
+function makeEmptyFC(): GeoJSON.FeatureCollection {
+  return { type: 'FeatureCollection', features: [] };
+}
+
+function makeLineFC(coords: number[][]): GeoJSON.FeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }],
+  };
 }
 
 export function IsoHomeMap({
@@ -99,8 +125,8 @@ export function IsoHomeMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
-  const driveRouteAbortRef = useRef<AbortController | null>(null);
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
   useEffect(() => {
@@ -114,12 +140,8 @@ export function IsoHomeMap({
       accessToken: import.meta.env.VITE_MAPBOX_TOKEN,
     });
 
-    map.on('load', () => {
-      setMapLoaded(true);
-    });
-
+    map.on('load', () => setMapLoaded(true));
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
     mapRef.current = map;
 
     return () => {
@@ -146,18 +168,8 @@ export function IsoHomeMap({
       source.setData(polygonData);
     } else {
       map.addSource('isochrone-source', { type: 'geojson', data: polygonData });
-      map.addLayer({
-        id: 'isochrone-fill',
-        type: 'fill',
-        source: 'isochrone-source',
-        paint: { 'fill-color': '#ef4444', 'fill-opacity': 0.25 },
-      });
-      map.addLayer({
-        id: 'isochrone-outline',
-        type: 'line',
-        source: 'isochrone-source',
-        paint: { 'line-color': '#dc2626', 'line-width': 1.5 },
-      });
+      map.addLayer({ id: 'isochrone-fill', type: 'fill', source: 'isochrone-source', paint: { 'fill-color': '#ef4444', 'fill-opacity': 0.25 } });
+      map.addLayer({ id: 'isochrone-outline', type: 'line', source: 'isochrone-source', paint: { 'line-color': '#dc2626', 'line-width': 1.5 } });
     }
   }, [isochroneData, mapLoaded]);
 
@@ -165,17 +177,10 @@ export function IsoHomeMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !stationsData) return;
-
     if (!map.getSource('stations-source')) {
       map.addSource('stations-source', { type: 'geojson', data: stationsData as GeoJSON.FeatureCollection });
-      map.addLayer({
-        id: 'stations-layer',
-        type: 'circle',
-        source: 'stations-source',
-        paint: { 'circle-radius': 4, 'circle-color': '#1d4ed8', 'circle-opacity': 0.8 },
-      });
+      map.addLayer({ id: 'stations-layer', type: 'circle', source: 'stations-source', paint: { 'circle-radius': 4, 'circle-color': '#1d4ed8', 'circle-opacity': 0.8 } });
     }
-
     map.setLayoutProperty('stations-layer', 'visibility', showStations ? 'visible' : 'none');
   }, [stationsData, showStations, mapLoaded]);
 
@@ -183,76 +188,43 @@ export function IsoHomeMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !railLinesData) return;
-
     if (!map.getSource('rail-lines-source')) {
       map.addSource('rail-lines-source', { type: 'geojson', data: railLinesData as GeoJSON.FeatureCollection });
-      map.addLayer({
-        id: 'rail-lines-layer',
-        type: 'line',
-        source: 'rail-lines-source',
-        paint: { 'line-color': '#1d4ed8', 'line-width': 1, 'line-opacity': 0.6 },
-      });
+      map.addLayer({ id: 'rail-lines-layer', type: 'line', source: 'rail-lines-source', paint: { 'line-color': '#1d4ed8', 'line-width': 1, 'line-opacity': 0.6 } });
     }
-
     map.setLayoutProperty('rail-lines-layer', 'visibility', showRailLines ? 'visible' : 'none');
   }, [railLinesData, showRailLines, mapLoaded]);
 
-  // Route info hover interaction
+  // Clear all route display elements
   const clearRouteDisplay = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
-
     popupRef.current?.remove();
     popupRef.current = null;
-    driveRouteAbortRef.current?.abort();
-    driveRouteAbortRef.current = null;
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-
-    const emptyGeoJSON: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-    const driveSource = map.getSource('route-drive-source') as mapboxgl.GeoJSONSource | undefined;
-    const trainSource = map.getSource('route-train-source') as mapboxgl.GeoJSONSource | undefined;
-    if (driveSource) driveSource.setData(emptyGeoJSON);
-    if (trainSource) trainSource.setData(emptyGeoJSON);
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    const empty = makeEmptyFC();
+    (map.getSource('route-drive-source') as mapboxgl.GeoJSONSource | undefined)?.setData(empty);
+    (map.getSource('route-snap-source') as mapboxgl.GeoJSONSource | undefined)?.setData(empty);
+    (map.getSource('route-train-source') as mapboxgl.GeoJSONSource | undefined)?.setData(empty);
   }, []);
 
+  // Route hover interaction
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
 
-    // Ensure route line sources/layers exist
-    if (!map.getSource('route-drive-source')) {
-      map.addSource('route-drive-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'route-drive-layer',
-        type: 'line',
-        source: 'route-drive-source',
-        paint: {
-          'line-color': '#16a34a',
-          'line-width': 3,
-          'line-dasharray': [2, 2],
-        },
-      });
-    }
-    if (!map.getSource('route-train-source')) {
-      map.addSource('route-train-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'route-train-layer',
-        type: 'line',
-        source: 'route-train-source',
-        paint: {
-          'line-color': '#2563eb',
-          'line-width': 3,
-        },
-      });
+    // Ensure route sources/layers exist
+    for (const [src, id, paint] of [
+      ['route-snap-source', 'route-snap-layer', { 'line-color': '#9ca3af', 'line-width': 2, 'line-dasharray': [1, 3] }],
+      ['route-drive-source', 'route-drive-layer', { 'line-color': '#16a34a', 'line-width': 3, 'line-dasharray': [2, 2] }],
+      ['route-train-source', 'route-train-layer', { 'line-color': '#2563eb', 'line-width': 3 }],
+    ] as const) {
+      if (!map.getSource(src)) {
+        map.addSource(src, { type: 'geojson', data: makeEmptyFC() });
+        map.addLayer({ id, type: 'line', source: src, paint: paint as mapboxgl.LinePaint });
+      }
     }
 
     if (!showRouteInfo) {
@@ -261,10 +233,40 @@ export function IsoHomeMap({
       return;
     }
 
-    // Track last station to avoid re-fetching drive route when station hasn't changed
-    let lastStationCrs: string | null = null;
-    let lastHoverLng = 0;
-    let lastHoverLat = 0;
+    let lastFetchKey = '';
+
+    function updatePopup(
+      map: mapboxgl.Map,
+      lngLat: mapboxgl.LngLat,
+      station: StationInfo,
+      driveMinutes: number | null,
+    ) {
+      popupRef.current?.remove();
+
+      const driveText = driveMinutes !== null
+        ? `~${driveMinutes} min`
+        : `≤${station.drive_budget} min`;
+      const totalText = driveMinutes !== null
+        ? `~${driveMinutes + station.journey_minutes} min`
+        : `≤${station.drive_budget + station.journey_minutes} min`;
+
+      popupRef.current = new mapboxgl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 12,
+        className: 'route-info-popup',
+      })
+        .setLngLat(lngLat)
+        .setHTML(
+          `<div style="font-size:13px;line-height:1.4">
+            <div style="font-weight:600;margin-bottom:4px">Route via ${station.name}</div>
+            <div style="color:#16a34a">🚗 Drive to ${station.name}: ${driveText}</div>
+            <div style="color:#2563eb">🚆 Train to ${station.terminus_name}: ${station.journey_minutes} min</div>
+            <div style="border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:600">Total: ${totalText}</div>
+          </div>`,
+        )
+        .addTo(map);
+    }
 
     function onMouseMove(e: mapboxgl.MapMouseEvent) {
       if (!showRouteInfo || !map) return;
@@ -272,7 +274,7 @@ export function IsoHomeMap({
       const features = map.queryRenderedFeatures(e.point, { layers: ['isochrone-fill'] });
       if (features.length === 0) {
         clearRouteDisplay();
-        lastStationCrs = null;
+        lastFetchKey = '';
         map.getCanvas().style.cursor = '';
         return;
       }
@@ -280,119 +282,73 @@ export function IsoHomeMap({
       map.getCanvas().style.cursor = 'crosshair';
 
       const station = findNearestStation(e.lngLat.lng, e.lngLat.lat, isochroneData);
-      if (!station) {
-        clearRouteDisplay();
-        lastStationCrs = null;
-        return;
-      }
+      if (!station) { clearRouteDisplay(); lastFetchKey = ''; return; }
 
-      const totalTime = station.journey_minutes + station.drive_budget;
+      // Show popup with static drive budget initially
+      updatePopup(map, e.lngLat, station, null);
 
-      // Update popup
-      popupRef.current?.remove();
-      popupRef.current = new mapboxgl.Popup({
-        closeButton: false,
-        closeOnClick: false,
-        offset: 12,
-        className: 'route-info-popup',
-      })
-        .setLngLat(e.lngLat)
-        .setHTML(
-          `<div style="font-size:13px;line-height:1.4">
-            <div style="font-weight:600;margin-bottom:4px">
-              Route via ${station.name}
-            </div>
-            <div style="color:#16a34a">
-              🚗 Drive to ${station.name}: ≤${station.drive_budget} min
-            </div>
-            <div style="color:#2563eb">
-              🚆 Train to ${station.terminus_name}: ${station.journey_minutes} min
-            </div>
-            <div style="border-top:1px solid #e5e7eb;margin-top:4px;padding-top:4px;font-weight:600">
-              Total: ≤${totalTime} min
-            </div>
-          </div>`,
-        )
-        .addTo(map);
-
-      // Train leg — use precomputed rail route if available
+      // Train leg — precomputed rail route
       const trainCoords = station.rail_route ??
         [[station.station_lon, station.station_lat], [station.terminus_lon, station.terminus_lat]];
+      (map.getSource('route-train-source') as mapboxgl.GeoJSONSource)?.setData(makeLineFC(trainCoords));
 
-      const trainGeoJSON: GeoJSON.FeatureCollection = {
-        type: 'FeatureCollection',
-        features: [{
-          type: 'Feature',
-          geometry: { type: 'LineString', coordinates: trainCoords },
-          properties: {},
-        }],
-      };
-      const trainSource = map.getSource('route-train-source') as mapboxgl.GeoJSONSource;
-      trainSource?.setData(trainGeoJSON);
+      // Drive leg — show straight line immediately as loading state
+      const straightCoords = [[e.lngLat.lng, e.lngLat.lat], [station.station_lon, station.station_lat]];
+      (map.getSource('route-drive-source') as mapboxgl.GeoJSONSource)?.setData(makeLineFC(straightCoords));
+      (map.getSource('route-snap-source') as mapboxgl.GeoJSONSource)?.setData(makeEmptyFC());
 
-      // Drive leg — show straight line immediately, then fetch real route
-      const driveSource = map.getSource('route-drive-source') as mapboxgl.GeoJSONSource;
+      // Build a key to avoid re-fetching the same route
+      const fetchKey = `${e.lngLat.lng.toFixed(3)},${e.lngLat.lat.toFixed(3)}-${station.crs}`;
+      if (fetchKey === lastFetchKey) return;
 
-      // Immediate straight-line fallback
-      const straightLine: GeoJSON.FeatureCollection = {
-        type: 'FeatureCollection',
-        features: [{
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: [[e.lngLat.lng, e.lngLat.lat], [station.station_lon, station.station_lat]],
-          },
-          properties: {},
-        }],
-      };
-      driveSource?.setData(straightLine);
+      // Cancel previous fetch
+      abortRef.current?.abort();
+      if (timerRef.current) clearTimeout(timerRef.current);
 
-      // Debounced Mapbox Directions fetch for actual road route
-      const stationChanged = station.crs !== lastStationCrs;
-      const hoverMoved = Math.abs(e.lngLat.lng - lastHoverLng) > 0.005 ||
-                          Math.abs(e.lngLat.lat - lastHoverLat) > 0.005;
+      const hoverLng = e.lngLat.lng;
+      const hoverLat = e.lngLat.lat;
+      const hoverLngLat = e.lngLat;
+      const capturedStation = station;
 
-      if (stationChanged || hoverMoved) {
-        lastStationCrs = station.crs;
-        lastHoverLng = e.lngLat.lng;
-        lastHoverLat = e.lngLat.lat;
+      // Debounce: fetch road route after cursor stops for 150ms
+      timerRef.current = setTimeout(async () => {
+        const controller = new AbortController();
+        abortRef.current = controller;
 
-        // Cancel any pending request
-        driveRouteAbortRef.current?.abort();
-        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        const token = import.meta.env.VITE_MAPBOX_TOKEN;
+        const result = await fetchDriveRoute(
+          hoverLng, hoverLat,
+          capturedStation.station_lon, capturedStation.station_lat,
+          token, controller.signal,
+        );
 
-        const hoverLng = e.lngLat.lng;
-        const hoverLat = e.lngLat.lat;
-        const sLon = station.station_lon;
-        const sLat = station.station_lat;
+        if (controller.signal.aborted) return;
+        lastFetchKey = fetchKey;
 
-        debounceTimerRef.current = setTimeout(async () => {
-          const controller = new AbortController();
-          driveRouteAbortRef.current = controller;
+        if (result && result.coordinates.length >= 2) {
+          // Draw road route (snapped start → station)
+          (map.getSource('route-drive-source') as mapboxgl.GeoJSONSource)?.setData(
+            makeLineFC(result.coordinates),
+          );
 
-          const token = import.meta.env.VITE_MAPBOX_TOKEN;
-          const routeCoords = await fetchDriveRoute(hoverLng, hoverLat, sLon, sLat, token);
-
-          if (controller.signal.aborted) return;
-
-          if (routeCoords && routeCoords.length >= 2) {
-            const roadGeoJSON: GeoJSON.FeatureCollection = {
-              type: 'FeatureCollection',
-              features: [{
-                type: 'Feature',
-                geometry: { type: 'LineString', coordinates: routeCoords },
-                properties: {},
-              }],
-            };
-            driveSource?.setData(roadGeoJSON);
+          // Draw snap line (hover point → road snap point) if they differ
+          const [snapLng, snapLat] = result.snapped_start;
+          const snapDist = Math.abs(snapLng - hoverLng) + Math.abs(snapLat - hoverLat);
+          if (snapDist > 0.0005) {
+            (map.getSource('route-snap-source') as mapboxgl.GeoJSONSource)?.setData(
+              makeLineFC([[hoverLng, hoverLat], [snapLng, snapLat]]),
+            );
           }
-        }, 200);
-      }
+
+          // Update popup with actual drive duration
+          updatePopup(map, hoverLngLat, capturedStation, result.duration_minutes);
+        }
+      }, 150);
     }
 
     function onMouseLeave() {
       clearRouteDisplay();
-      lastStationCrs = null;
+      lastFetchKey = '';
       if (map) map.getCanvas().style.cursor = '';
     }
 

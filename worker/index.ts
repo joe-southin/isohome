@@ -1,5 +1,6 @@
 export interface Env {
   ISOHOME_BUCKET: R2Bucket;
+  ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 
 const VALID_CRS = ['KGX', 'PAD', 'WAT', 'VIC', 'LST', 'BFR', 'CST', 'CHX', 'EUS', 'MYB', 'STP'];
@@ -83,6 +84,7 @@ export default {
       return handleStatic('rail-lines', env);
     }
 
-    return jsonResponse({ error: 'Not found' }, 404);
+    // Non-API routes: let the assets binding handle it (serves index.html for SPA)
+    return env.ASSETS.fetch(request);
   },
 };

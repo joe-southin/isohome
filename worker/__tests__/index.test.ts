@@ -7,6 +7,11 @@ function mockEnv(getResult: unknown = null): Env {
     ISOHOME_BUCKET: {
       get: vi.fn().mockResolvedValue(getResult),
     } as unknown as R2Bucket,
+    ASSETS: {
+      fetch: vi.fn().mockResolvedValue(new Response('<html></html>', {
+        headers: { 'Content-Type': 'text/html' },
+      })),
+    },
   };
 }
 
@@ -129,10 +134,11 @@ describe('Worker API', () => {
   });
 
   describe('Unknown routes', () => {
-    it('returns 404 for unknown paths', async () => {
+    it('delegates non-API paths to ASSETS', async () => {
       const env = mockEnv();
-      const res = await worker.fetch(makeRequest('/api/unknown'), env);
-      expect(res.status).toBe(404);
+      const res = await worker.fetch(makeRequest('/isohome'), env);
+      expect(env.ASSETS.fetch).toHaveBeenCalled();
+      expect(res.headers.get('Content-Type')).toBe('text/html');
     });
   });
 });

@@ -475,3 +475,207 @@ If the Worker returns 404 (isochrone not yet computed for this combo), show a sh
 - Walking to station (drive only for MVP)
 - Journeys not involving a London terminus
 - Tube/DLR/Overground legs
+
+---
+
+## 8. Local development
+
+### 8.1 Two dev modes
+
+| Mode | Command | Use case |
+|------|---------|----------|
+| **Frontend only** | `npm run dev` | Front-end work; no Wrangler, no Cloudflare account needed; API mocked via MSW |
+| **Full stack** | `npm run dev:worker` | Testing Worker logic and R2 reads; uses `wrangler dev` with local Miniflare simulation |
+
+Both modes use the same Vite dev server on `localhost:5173`. In frontend-only mode, a Service Worker intercepts all `/api/*` fetch calls before they leave the browser and returns fixture responses.
+
+### 8.2 MSW setup (frontend-only mode)
+
+Install: `npm install --save-dev msw`
+
+```
+src/
+  mocks/
+    handlers.ts      # MSW request handlers — one per Worker endpoint
+    browser.ts       # setupWorker(…handlers) — used in dev
+    fixtures/
+      KGX-60.geojson   # isochrone fixture (copy of a real pre-computed file)
+      stations.geojson # ~50 station points (not full 2,500 — dev only)
+      rail-lines.geojson
+```
+
+**`src/mocks/handlers.ts`**:
+```typescript
+import { http, HttpResponse } from 'msw';
+import kgx60 from './fixtures/KGX-60.geojson';
+import stations from './fixtures/stations.geojson';
+import railLines from './fixtures/rail-lines.geojson';
+
+const VALID_CRS = ['KGX','PAD','WAT','VIC','LST','BFR','CST','CHX','EUS','MYB'];
+const VALID_BUCKETS = ['30','45','60','75','90','120'];
+
+export const handlers = [
+  http.get('/api/isochrone/:crs/:minutes', ({ params }) => {
+    const { crs, minutes } = params as { crs: string; minutes: string };
+    if (!VALID_CRS.includes(crs) || !VALID_BUCKETS.includes(minutes)) {
+      return HttpResponse.json({ error: 'Invalid params', code: 'INVALID_PARAMS' }, { status: 400 });
+    }
+    // Return the KGX/60 fixture for all combos in dev — good enough for UI work
+    return HttpResponse.json(kgx60);
+  }),
+  http.get('/api/static/stations', () => HttpResponse.json(stations)),
+  http.get('/api/static/rail-lines', () => HttpResponse.json(railLines)),
+];
+```
+
+**`src/mocks/browser.ts`**:
+```typescript
+import { setupWorker } from 'msw/browser';
+import { handlers } from './handlers';
+export const worker = setupWorker(...handlers);
+```
+
+**`src/main.tsx`** — start MSW in dev:
+```typescript
+async function enableMocking() {
+  if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS !== 'false') {
+    const { worker } = await import('./mocks/browser');
+    return worker.start({ onUnhandledRequest: 'bypass' });
+  }
+}
+enableMocking().then(() => { ReactDOM.createRoot(...).render(...) });
+```
+
+MSW is **only active in dev** (`import.meta.env.DEV`). Production builds never include it. Set `VITE_USE_MOCKS=false` in `.env.local` to disable mocks and hit `wrangler dev` instead.
+
+### 8.3 wrangler dev (full-stack mode)
+
+`wrangler dev` uses Miniflare locally — no live Cloudflare services needed. However, the local R2 bucket starts empty. Seed it with fixture files on first run:
+
+```bash
+# Seed local R2 with dev fixtures (run once after cloning)
+npm run seed:local
+```
+
+**`scripts/seed-local.sh`**:
+```bash
+#!/bin/bash
+wrangler r2 object put isohome/isochrones/KGX/60.geojson --file src/mocks/fixtures/KGX-60.geojson --local
+wrangler r2 object put isohome/static/stations.geojson --file src/mocks/fixtures/stations.geojson --local
+wrangler r2 object put isohome/static/rail-lines.geojson --file src/mocks/fixtures/rail-lines.geojson --local
+```
+
+### 8.4 npm scripts
+
+Add to `package.json`:
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "dev:worker": "wrangler dev",
+    "seed:local": "bash scripts/seed-local.sh",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "vite build",
+    "deploy": "wrangler deploy"
+  }
+}
+```
+
+---
+
+## 9. Testing
+
+### 9.1 Vitest setup
+
+Vitest is configured inside `vite.config.ts` (no separate config file needed):
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['src/test-setup.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/features/isohome/**'],
+      exclude: ['src/features/isohome/__tests__/**', 'src/mocks/**'],
+      thresholds: {
+        lines: 80,
+        branches: 80,
+        functions: 80,
+        statements: 80,
+      },
+      reporter: ['text', 'html'],
+    },
+  },
+});
+```
+
+**`src/test-setup.ts`**:
+```typescript
+import '@testing-library/jest-dom';
+import { server } from './mocks/server'; // MSW Node server (separate from browser worker)
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+```
+
+Add to `package.json` dev deps: `vitest`, `@vitest/coverage-v8`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`.
+
+### 9.2 What to test (coverage scope)
+
+Coverage is measured over `src/features/isohome/**` only. The 80% threshold applies to that directory.
+
+| Module | What to test | Notes |
+|--------|-------------|-------|
+| `config.ts` | LONDON_TERMINI has 10 entries; TIME_BUCKETS has 6 entries; all CRS codes are 3 chars | Trivial but documents invariants |
+| `utils/formatTime.ts` | `formatMinutes(60) === '1 hour'`; `formatMinutes(75) === '1 hr 15 min'`; `formatMinutes(30) === '30 min'` | Pure function — easy to reach 100% |
+| `utils/sliderIndex.ts` | `bucketFromIndex(0) === 30`; `bucketFromIndex(5) === 120`; index out of range throws | Pure function |
+| `IsoHomeControls` | Renders terminus dropdown with 10 options; slider renders 6 stops; switching toggles fires callbacks | React Testing Library |
+| `IsoHomePage` | Renders without crashing; shows loading state while fetch is in-flight; shows error Alert on 404 | MSW handlers used in test env |
+| Worker handlers (JS) | Valid CRS + bucket → 200 with GeoJSON body; invalid CRS → 400; missing R2 object → 404 | Mock `env.ISOHOME_BUCKET.get()` |
+
+### 9.3 Worker unit tests
+
+Worker handler logic is tested separately from Vitest (Vitest runs in jsdom, not the Workers runtime). Use `vitest` with the `@cloudflare/vitest-pool-workers` pool:
+
+```typescript
+// vitest.worker.config.ts
+import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
+export default defineWorkersConfig({
+  test: {
+    poolOptions: {
+      workers: { wrangler: { configPath: './wrangler.toml' } },
+    },
+  },
+});
+```
+
+Run with: `vitest run --config vitest.worker.config.ts`
+
+Add to npm scripts: `"test:worker": "vitest run --config vitest.worker.config.ts"`
+
+### 9.4 Python pre-computation tests
+
+Python scripts have their own test suite using `pytest`:
+
+```
+scripts/
+  precompute/
+    ...
+  tests/
+    test_fetch_journey_times.py   # mock Transport API responses; test parsing logic
+    test_compute_isochrones.py    # mock ORS responses; test polygon union logic
+    test_upload_to_r2.py          # mock boto3; test key naming + content-type
+```
+
+Run with: `pytest scripts/tests/ --cov=scripts/precompute --cov-report=term-missing`
+
+Target: 80% coverage on `scripts/precompute/`. Use `pytest-mock` for mocking API calls — do not make real HTTP requests in tests.

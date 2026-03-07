@@ -54,6 +54,7 @@ Phase 5: (Future) Tube / real-time / additional layers
 - Running `python compute_isochrones.py --terminus KGX --minutes 60` produces a valid GeoJSON
 - Pasting the output into geojson.io shows a plausible UK region centred around London
 - Clophill, Bedfordshire (~52.03°N, -0.44°W) falls inside the polygon
+- `pytest scripts/tests/ --cov=scripts/precompute` reports ≥80% coverage
 
 ---
 
@@ -72,7 +73,10 @@ Deliverables:
     stations.json               # static UK mainline station list (CRS, name, lat, lon)
     fetch_journey_times.py      # queries Transport API for all stations → KGX, 08:30 Tuesday
     compute_isochrones.py       # reads journey times, calls ORS, unions polygons, writes GeoJSON
-    requirements.txt            # requests, shapely, fiona, boto3
+    requirements.txt            # requests, shapely, fiona, boto3, pytest, pytest-mock, pytest-cov
+  scripts/tests/
+    test_fetch_journey_times.py # mock Transport API responses; test duration parsing
+    test_compute_isochrones.py  # mock ORS responses; test polygon union + drive budget logic
 
 Start from: empty scripts/ directory.
 
@@ -88,6 +92,13 @@ Key spec notes:
 
 Credentials come from environment variables (never hardcoded):
   TRANSPORT_API_APP_ID, TRANSPORT_API_APP_KEY, ORS_API_KEY
+
+Also implement pytest test suite (see spec section 9.4):
+- Mock all HTTP calls with pytest-mock; no real API requests in tests
+- Test duration field parsing from Transport API response
+- Test drive budget calculation (total - train_time, min 5 min buffer)
+- Test polygon union produces a valid shapely geometry
+- Target: ≥80% coverage on scripts/precompute/
 ```
 
 ---
@@ -143,24 +154,32 @@ Credentials: CF_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (env vars, ne
 
 ---
 
-## Phase 3 — React map UI
+## Phase 3 — React map UI + dev tooling
 
-**Goal**: The `/isohome` page exists on the site with a working Mapbox map, terminus selector, time slider, and layer toggles. Uses real API data from Phase 2.
+**Goal**: The `/isohome` page exists on the site with a working Mapbox map, terminus selector, time slider, and layer toggles. MSW mocking enables frontend development without Cloudflare services. Vitest is configured with ≥80% coverage enforced in CI.
 
 **Deliverables**:
-- `src/features/isohome/` directory with all components
 - `src/features/isohome/config.ts` — LONDON_TERMINI + TIME_BUCKETS constants
 - `src/features/isohome/IsoHomePage.tsx` — page component
 - `src/features/isohome/IsoHomeControls.tsx` — shadcn/ui controls panel
 - `src/features/isohome/IsoHomeMap.tsx` — Mapbox GL JS wrapper
+- `src/features/isohome/__tests__/` — Vitest tests for all modules (see spec section 9.2)
+- `src/mocks/handlers.ts` + `src/mocks/browser.ts` + `src/mocks/server.ts` — MSW setup
+- `src/mocks/fixtures/` — KGX-60.geojson, stations.geojson, rail-lines.geojson (dev fixtures)
+- `src/test-setup.ts` — MSW node server wired to Vitest lifecycle
+- `scripts/seed-local.sh` — seeds local wrangler R2 from fixture files
+- `vite.config.ts` updated — Vitest config with v8 coverage, 80% thresholds
 - Route added to React Router v6 config
 
 **Dependencies**:
-- `mapbox-gl` npm package (add to package.json)
-- Phase 2 Worker endpoints live and accessible
+- `mapbox-gl`, `msw`, `vitest`, `@vitest/coverage-v8`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom` (add to package.json)
 - `VITE_MAPBOX_TOKEN` in `.env.local`
+- Phase 2 Worker endpoints available (or run `npm run dev` for MSW-only mode)
 
-**Acceptance**: All 10 acceptance criteria from SPEC.md section 5 pass.
+**Acceptance**:
+- `npm run dev` starts without errors; map renders using MSW fixture data
+- `npm run test:coverage` passes with ≥80% lines/branches/functions/statements
+- All 10 acceptance criteria from SPEC.md section 5 pass against live Worker data
 
 ---
 
@@ -169,30 +188,53 @@ Credentials: CF_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (env vars, ne
 ```
 Read BRIEF.md and SPEC.md.
 
-Implement Phase 3: React map UI.
+Implement Phase 3: React map UI + dev tooling.
 
-Goal: Build the /isohome page — Mapbox GL JS map with isochrone display, terminus
-selector, time slider, and toggleable station/rail-line layers.
+Goal: Build the /isohome page with Mapbox GL JS map, shadcn/ui controls, MSW mocking
+for offline frontend dev, and Vitest with ≥80% coverage.
 
 Deliverables:
-  src/features/isohome/config.ts         # LONDON_TERMINI + TIME_BUCKETS (from spec section 1.1)
-  src/features/isohome/IsoHomePage.tsx   # page layout
+  src/features/isohome/config.ts            # LONDON_TERMINI + TIME_BUCKETS (spec section 1.1)
+  src/features/isohome/IsoHomePage.tsx      # page layout
   src/features/isohome/IsoHomeControls.tsx  # shadcn/ui Select + Slider + Switch toggles
-  src/features/isohome/IsoHomeMap.tsx    # Mapbox GL JS map + all layers
-  (update) src/App.tsx or router config  # add /isohome route
+  src/features/isohome/IsoHomeMap.tsx       # Mapbox GL JS map + all layers
+  src/features/isohome/utils/formatTime.ts  # formatMinutes(n) → human-readable string
+  src/features/isohome/__tests__/           # Vitest tests (spec section 9.2)
+  src/mocks/handlers.ts                     # MSW handlers for all three /api/* endpoints
+  src/mocks/browser.ts                      # setupWorker for Vite dev mode
+  src/mocks/server.ts                       # setupServer for Vitest (Node)
+  src/mocks/fixtures/KGX-60.geojson         # trimmed real isochrone GeoJSON
+  src/mocks/fixtures/stations.geojson       # ~50 station points
+  src/mocks/fixtures/rail-lines.geojson     # sample rail lines
+  src/test-setup.ts                         # beforeAll/afterEach/afterAll MSW lifecycle
+  scripts/seed-local.sh                     # wrangler r2 object put for local dev
+  (update) vite.config.ts                   # add vitest config with v8 coverage thresholds
+  (update) src/main.tsx                     # conditional MSW bootstrap in dev mode
+  (update) src/App.tsx or router config     # add /isohome route
+  (update) package.json                     # add dev, dev:worker, test, test:coverage, seed:local scripts
 
-Start from: Phase 2 complete; Worker API endpoints return data.
+Start from: Phase 2 complete; Worker API endpoints exist; MSW and Vitest not yet installed.
 
 Key spec notes:
+
+MSW (spec section 8.2):
+- Activate in dev when import.meta.env.DEV && VITE_USE_MOCKS !== 'false'
+- Return KGX-60 fixture for all /api/isochrone/:crs/:minutes combos in dev
+- MSW Node server used in Vitest via src/test-setup.ts (server.listen/resetHandlers/close)
+
+Vitest (spec section 9.1–9.2):
+- environment: jsdom, globals: true
+- coverage provider: v8, include: src/features/isohome/**, thresholds: 80% all axes
+- Test config.ts invariants, formatTime utils, IsoHomeControls interactions, IsoHomePage states
+
+Map (spec section 4):
 - Map init: center [-2.5, 54.0], zoom 5.5, style mapbox://styles/mapbox/light-v11
 - Slider: 6 stops (30/45/60/75/90/120 min), index → TIME_BUCKETS[i]
-- Layer colours: isochrone fill #ef4444 opacity 0.25; outline #dc2626; stations #1d4ed8; rail lines #1d4ed8
+- Layer colours: isochrone fill #ef4444 opacity 0.25; outline #dc2626; stations/lines #1d4ed8
 - TanStack Query keys: ['isochrone', crs, minutes], ['static', 'stations'], ['static', 'rail-lines']
 - staleTime: 1 hour for isochrones, Infinity for static layers
-- On isochrone source update: use setData() if source exists, addSource/addLayer if not
-- Loading state: controls spinner + map opacity 0.5
-- Error state: shadcn/ui Alert if 404 returned
-- See spec section 4 for full component tree and implementation details
+- On isochrone source update: setData() if source exists, addSource/addLayer if not
+- Loading: controls spinner + map opacity 0.5; Error: shadcn/ui Alert on 404
 ```
 
 ---

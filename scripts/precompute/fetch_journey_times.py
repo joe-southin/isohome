@@ -1,13 +1,40 @@
-"""Fetch journey times from Transport API for UK rail stations to London termini."""
+"""Fetch journey times from Transport API for UK rail stations to London termini.
+
+Uses the timetable + service_timetable endpoints to compute actual journey times,
+since the journey planner endpoint is unreliable.
+
+Strategy per (station, terminus) pair:
+  1. GET /train/station/{station}/timetable.json?calling_at={terminus} — morning departures
+  2. For the first London-bound departure, GET its service_timetable to find arrival at terminus
+  3. Journey time = arrival_at_terminus - departure_from_station
+"""
 
 import json
 import os
 import re
 import time
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
 import requests
+
+
+def _next_tuesday() -> str:
+    """Return the next Tuesday as YYYY-MM-DD string."""
+    today = date.today()
+    days_ahead = (1 - today.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    return (today + timedelta(days=days_ahead)).isoformat()
+
+
+def _time_to_minutes(t: str) -> Optional[int]:
+    """Convert HH:MM time string to minutes since midnight."""
+    m = re.match(r"(\d{2}):(\d{2})", t)
+    if not m:
+        return None
+    return int(m.group(1)) * 60 + int(m.group(2))
 
 
 def parse_duration(duration_str: str) -> Optional[int]:
@@ -62,8 +89,12 @@ def fetch_journey_time(
     app_id: str,
     app_key: str,
     session: Optional[requests.Session] = None,
+    ref_date: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Fetch the fastest journey time between two stations from Transport API.
+    """Fetch the fastest journey time between a station and a terminus.
+
+    Uses timetable + service_timetable endpoints. Looks for the earliest
+    morning departure (08:00-09:30 window) that calls at the terminus.
 
     Args:
         remote_crs: CRS code of the origin station.
@@ -71,51 +102,85 @@ def fetch_journey_time(
         app_id: Transport API app ID.
         app_key: Transport API app key.
         session: Optional requests session for connection reuse.
+        ref_date: Reference date (YYYY-MM-DD). Defaults to next Tuesday.
 
     Returns:
         Dictionary with remote_crs, terminus_crs, journey_minutes (int or None),
         and changes (int).
     """
-    url = (
-        f"https://transportapi.com/v3/uk/public/journey"
-        f"/from/station_code:{remote_crs}"
-        f"/to/station_code:{terminus_crs}.json"
+    null_result = {
+        "remote_crs": remote_crs,
+        "terminus_crs": terminus_crs,
+        "journey_minutes": None,
+        "changes": 0,
+    }
+
+    requester = session or requests
+    ref_date = ref_date or _next_tuesday()
+
+    # Step 1: Get departures from remote station that call at terminus
+    timetable_url = (
+        f"https://transportapi.com/v3/uk/train/station/{remote_crs}/timetable.json"
     )
     params = {
         "app_id": app_id,
         "app_key": app_key,
-        "date": "next_tuesday",
-        "time": "08:30",
-        "type": "fastest",
+        "date": ref_date,
+        "time": "08:00",
+        "train_status": "passenger",
+        "calling_at": terminus_crs,
     }
 
-    requester = session or requests
     try:
-        response = requester.get(url, params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        resp = requester.get(timetable_url, params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
     except Exception:
-        return {
-            "remote_crs": remote_crs,
-            "terminus_crs": terminus_crs,
-            "journey_minutes": None,
-            "changes": 0,
-        }
+        return null_result
 
-    routes = data.get("routes", [])
-    if not routes:
-        return {
-            "remote_crs": remote_crs,
-            "terminus_crs": terminus_crs,
-            "journey_minutes": None,
-            "changes": 0,
-        }
+    departures = data.get("departures", {}).get("all", [])
+    if not departures:
+        return null_result
 
-    route = routes[0]
-    duration_str = route.get("duration", "")
-    journey_minutes = parse_duration(duration_str)
-    changes = len(route.get("route_parts", [])) - 1
-    changes = max(changes, 0)
+    # Pick the first departure (earliest in the morning window)
+    dep = departures[0]
+    dep_time_str = dep.get("aimed_departure_time")
+    svc_url = dep.get("service_timetable", {}).get("id")
+
+    if not dep_time_str or not svc_url:
+        return null_result
+
+    dep_minutes = _time_to_minutes(dep_time_str)
+    if dep_minutes is None:
+        return null_result
+
+    # Step 2: Fetch service timetable to find arrival at terminus
+    try:
+        resp2 = requester.get(svc_url, timeout=30)
+        resp2.raise_for_status()
+        svc_data = resp2.json()
+    except Exception:
+        return null_result
+
+    stops = svc_data.get("stops", [])
+    arr_minutes = None
+    for stop in stops:
+        if stop.get("station_code") == terminus_crs:
+            arr_time_str = stop.get("aimed_arrival_time") or stop.get("aimed_departure_time")
+            if arr_time_str:
+                arr_minutes = _time_to_minutes(arr_time_str)
+            break
+
+    if arr_minutes is None:
+        return null_result
+
+    # Handle overnight (shouldn't happen for morning commutes, but be safe)
+    journey_minutes = arr_minutes - dep_minutes
+    if journey_minutes < 0:
+        journey_minutes += 24 * 60
+
+    # Count changes (single direct train = 0 changes)
+    changes = 0
 
     return {
         "remote_crs": remote_crs,

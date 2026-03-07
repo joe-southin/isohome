@@ -115,12 +115,20 @@ def step_fetch(termini: list[str]) -> None:
 
 def step_compute(termini: list[str]) -> None:
     """Compute isochrones for specified termini × all time buckets."""
-    ors_api_key = os.environ.get("ORS_API_KEY")
+    ors_api_key = os.environ.get("ORS_API_KEY", "")
+    ors_base_url = os.environ.get("ORS_BASE_URL")  # e.g. http://localhost:8080/ors/v2
 
-    if not ors_api_key:
-        print("ERROR: ORS_API_KEY must be set")
-        print("       Register free at openrouteservice.org, add to .env")
+    if not ors_api_key and not ors_base_url:
+        print("ERROR: Set ORS_API_KEY (public API) or ORS_BASE_URL (local instance)")
+        print("       For local Docker: ORS_BASE_URL=http://localhost:8080/ors/v2")
         sys.exit(1)
+
+    if ors_base_url:
+        print(f"Using local ORS instance: {ors_base_url}")
+        delay = 0.05  # local instance — no rate limit
+    else:
+        print("Using public ORS API (rate limited)")
+        delay = 1.5
 
     checkpoint = load_checkpoint()
 
@@ -152,7 +160,8 @@ def step_compute(termini: list[str]) -> None:
                 time_budget=budget,
                 journey_times=journey_times,
                 ors_api_key=ors_api_key,
-                delay=1.5,  # ORS free tier: ~40 req/min
+                delay=delay,
+                ors_base_url=ors_base_url,
             )
 
             output_path = str(OUTPUT_DIR / "isochrones" / terminus / f"{budget}.geojson")

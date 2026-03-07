@@ -23,6 +23,7 @@ LONDON_TERMINI = {
     "CHX": "Charing Cross",
     "EUS": "Euston",
     "MYB": "Marylebone",
+    "STP": "St Pancras International",
 }
 
 
@@ -32,6 +33,7 @@ def fetch_ors_isochrone(
     minutes: int,
     api_key: str,
     session: Optional[requests.Session] = None,
+    base_url: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Fetch a drive-time isochrone polygon from OpenRouteService.
 
@@ -39,17 +41,21 @@ def fetch_ors_isochrone(
         lon: Longitude of the station.
         lat: Latitude of the station.
         minutes: Drive time budget in minutes.
-        api_key: ORS API key.
+        api_key: ORS API key (ignored for local instances).
         session: Optional requests session for connection reuse.
+        base_url: ORS base URL. Defaults to public API. Set to
+                  e.g. "http://localhost:8080/ors/v2" for local instances.
 
     Returns:
         GeoJSON geometry dict (Polygon), or None on failure.
     """
-    url = "https://api.openrouteservice.org/v2/isochrones/driving-car"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+    if base_url:
+        url = f"{base_url.rstrip('/')}/isochrones/driving-car"
+    else:
+        url = "https://api.openrouteservice.org/v2/isochrones/driving-car"
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if not base_url:
+        headers["Authorization"] = f"Bearer {api_key}"
     body = {
         "locations": [[lon, lat]],
         "range": [minutes * 60],
@@ -113,6 +119,7 @@ def compute_isochrone(
     ors_api_key: str,
     session: Optional[requests.Session] = None,
     delay: float = 0.2,
+    ors_base_url: Optional[str] = None,
 ) -> dict[str, Any]:
     """Compute a unified isochrone polygon for a terminus and time budget.
 
@@ -140,6 +147,7 @@ def compute_isochrone(
             minutes=station["drive_budget"],
             api_key=ors_api_key,
             session=sess,
+            base_url=ors_base_url,
         )
         if geom:
             try:
@@ -200,7 +208,8 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", default="output/isochrones", help="Output directory")
     args = parser.parse_args()
 
-    ors_api_key = os.environ["ORS_API_KEY"]
+    ors_api_key = os.environ.get("ORS_API_KEY", "")
+    ors_base_url = os.environ.get("ORS_BASE_URL")  # e.g. http://localhost:8080/ors/v2
 
     with open(args.journey_times) as f:
         journey_times = json.load(f)
@@ -214,6 +223,7 @@ if __name__ == "__main__":
         time_budget=args.minutes,
         journey_times=journey_times,
         ors_api_key=ors_api_key,
+        ors_base_url=ors_base_url,
     )
 
     output_path = f"{args.output_dir}/{args.terminus}/{args.minutes}.geojson"

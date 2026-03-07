@@ -1,2 +1,13 @@
 .DS_Store
 .env
+.env.local
+.coverage
+node_modules/
+dist/
+coverage/
+output/
+scripts/data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.wrangler/

@@ -1,0 +1,6 @@
+requests
+shapely
+boto3
+pytest
+pytest-mock
+pytest-cov

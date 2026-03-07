@@ -1,0 +1,29 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-0.126, 51.532], [-0.104, 51.514], [-0.327, 51.750], [-0.414, 51.882], [-0.261, 51.948], [-0.480, 52.136], [-0.250, 52.575]]
+      },
+      "properties": {"name": "East Coast Main Line", "route_type": "mainline"}
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-0.126, 51.532], [-0.203, 51.801], [-0.261, 51.948], [0.137, 52.194]]
+      },
+      "properties": {"name": "Cambridge Line", "route_type": "mainline"}
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-0.177, 51.501], [-0.557, 51.318], [-0.972, 51.459], [-1.320, 51.067], [-1.413, 50.907]]
+      },
+      "properties": {"name": "South Western Main Line", "route_type": "mainline"}
+    }
+  ]
+}

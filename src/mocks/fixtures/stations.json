@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.480, 52.136]}, "properties": {"crs": "BDM", "name": "Bedford", "operator": "Thameslink"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.497, 52.003]}, "properties": {"crs": "FLT", "name": "Flitwick", "operator": "Thameslink"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.261, 51.948]}, "properties": {"crs": "SVG", "name": "Stevenage", "operator": "Great Northern"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [0.137, 52.194]}, "properties": {"crs": "CBG", "name": "Cambridge", "operator": "Greater Anglia"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.250, 52.575]}, "properties": {"crs": "PBO", "name": "Peterborough", "operator": "LNER"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.643, 52.906]}, "properties": {"crs": "GRA", "name": "Grantham", "operator": "LNER"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.261, 51.948]}, "properties": {"crs": "HIT", "name": "Hitchin", "operator": "Great Northern"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.414, 51.882]}, "properties": {"crs": "LUT", "name": "Luton", "operator": "Thameslink"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.327, 51.750]}, "properties": {"crs": "SAC", "name": "St Albans City", "operator": "Thameslink"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.972, 51.459]}, "properties": {"crs": "RDG", "name": "Reading", "operator": "GWR"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.557, 51.318]}, "properties": {"crs": "WOK", "name": "Woking", "operator": "SWR"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.161, 51.156]}, "properties": {"crs": "GTW", "name": "Gatwick Airport", "operator": "Southern"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.141, 50.829]}, "properties": {"crs": "BTN", "name": "Brighton", "operator": "Southern"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [0.469, 51.736]}, "properties": {"crs": "CHM", "name": "Chelmsford", "operator": "Greater Anglia"}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.774, 52.034]}, "properties": {"crs": "MKC", "name": "Milton Keynes Central", "operator": "Avanti"}}
+  ]
+}

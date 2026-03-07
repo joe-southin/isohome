@@ -14,6 +14,7 @@ interface StationInfo {
   terminus_lat: number;
   station_lon: number;
   station_lat: number;
+  rail_route: number[][] | null;
 }
 
 interface IsoHomeMapProps {
@@ -59,11 +60,31 @@ function findNearestStation(
         terminus_lat: props.terminus_lat,
         station_lon: sLng,
         station_lat: sLat,
+        rail_route: props.rail_route ?? null,
       };
     }
   }
 
   return nearest;
+}
+
+/** Fetch a driving route from Mapbox Directions API. */
+async function fetchDriveRoute(
+  fromLng: number,
+  fromLat: number,
+  toLng: number,
+  toLat: number,
+  token: string,
+): Promise<number[][] | null> {
+  try {
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${fromLng},${fromLat};${toLng},${toLat}?geometries=geojson&overview=full&access_token=${token}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.routes?.[0]?.geometry?.coordinates ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function IsoHomeMap({
@@ -78,6 +99,8 @@ export function IsoHomeMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
+  const driveRouteAbortRef = useRef<AbortController | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
   useEffect(() => {
@@ -111,7 +134,6 @@ export function IsoHomeMap({
     const map = mapRef.current;
     if (!map || !mapLoaded || !isochroneData) return;
 
-    // Filter to only polygon/multipolygon features for the fill layer
     const polygonData: GeoJSON.FeatureCollection = {
       type: 'FeatureCollection',
       features: (isochroneData as GeoJSON.FeatureCollection).features.filter(
@@ -182,6 +204,12 @@ export function IsoHomeMap({
 
     popupRef.current?.remove();
     popupRef.current = null;
+    driveRouteAbortRef.current?.abort();
+    driveRouteAbortRef.current = null;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
 
     const emptyGeoJSON: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
     const driveSource = map.getSource('route-drive-source') as mapboxgl.GeoJSONSource | undefined;
@@ -233,13 +261,18 @@ export function IsoHomeMap({
       return;
     }
 
+    // Track last station to avoid re-fetching drive route when station hasn't changed
+    let lastStationCrs: string | null = null;
+    let lastHoverLng = 0;
+    let lastHoverLat = 0;
+
     function onMouseMove(e: mapboxgl.MapMouseEvent) {
       if (!showRouteInfo || !map) return;
 
-      // Check if cursor is inside the isochrone polygon
       const features = map.queryRenderedFeatures(e.point, { layers: ['isochrone-fill'] });
       if (features.length === 0) {
         clearRouteDisplay();
+        lastStationCrs = null;
         map.getCanvas().style.cursor = '';
         return;
       }
@@ -249,6 +282,7 @@ export function IsoHomeMap({
       const station = findNearestStation(e.lngLat.lng, e.lngLat.lat, isochroneData);
       if (!station) {
         clearRouteDisplay();
+        lastStationCrs = null;
         return;
       }
 
@@ -281,50 +315,84 @@ export function IsoHomeMap({
         )
         .addTo(map);
 
-      // Draw drive leg (cursor → station)
-      const driveGeoJSON: GeoJSON.FeatureCollection = {
-        type: 'FeatureCollection',
-        features: [
-          {
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: [
-                [e.lngLat.lng, e.lngLat.lat],
-                [station.station_lon, station.station_lat],
-              ],
-            },
-            properties: {},
-          },
-        ],
-      };
+      // Train leg — use precomputed rail route if available
+      const trainCoords = station.rail_route ??
+        [[station.station_lon, station.station_lat], [station.terminus_lon, station.terminus_lat]];
 
-      // Draw train leg (station → terminus)
       const trainGeoJSON: GeoJSON.FeatureCollection = {
         type: 'FeatureCollection',
-        features: [
-          {
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: [
-                [station.station_lon, station.station_lat],
-                [station.terminus_lon, station.terminus_lat],
-              ],
-            },
-            properties: {},
-          },
-        ],
+        features: [{
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: trainCoords },
+          properties: {},
+        }],
       };
-
-      const driveSource = map.getSource('route-drive-source') as mapboxgl.GeoJSONSource;
       const trainSource = map.getSource('route-train-source') as mapboxgl.GeoJSONSource;
-      driveSource?.setData(driveGeoJSON);
       trainSource?.setData(trainGeoJSON);
+
+      // Drive leg — show straight line immediately, then fetch real route
+      const driveSource = map.getSource('route-drive-source') as mapboxgl.GeoJSONSource;
+
+      // Immediate straight-line fallback
+      const straightLine: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [[e.lngLat.lng, e.lngLat.lat], [station.station_lon, station.station_lat]],
+          },
+          properties: {},
+        }],
+      };
+      driveSource?.setData(straightLine);
+
+      // Debounced Mapbox Directions fetch for actual road route
+      const stationChanged = station.crs !== lastStationCrs;
+      const hoverMoved = Math.abs(e.lngLat.lng - lastHoverLng) > 0.005 ||
+                          Math.abs(e.lngLat.lat - lastHoverLat) > 0.005;
+
+      if (stationChanged || hoverMoved) {
+        lastStationCrs = station.crs;
+        lastHoverLng = e.lngLat.lng;
+        lastHoverLat = e.lngLat.lat;
+
+        // Cancel any pending request
+        driveRouteAbortRef.current?.abort();
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+
+        const hoverLng = e.lngLat.lng;
+        const hoverLat = e.lngLat.lat;
+        const sLon = station.station_lon;
+        const sLat = station.station_lat;
+
+        debounceTimerRef.current = setTimeout(async () => {
+          const controller = new AbortController();
+          driveRouteAbortRef.current = controller;
+
+          const token = import.meta.env.VITE_MAPBOX_TOKEN;
+          const routeCoords = await fetchDriveRoute(hoverLng, hoverLat, sLon, sLat, token);
+
+          if (controller.signal.aborted) return;
+
+          if (routeCoords && routeCoords.length >= 2) {
+            const roadGeoJSON: GeoJSON.FeatureCollection = {
+              type: 'FeatureCollection',
+              features: [{
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: routeCoords },
+                properties: {},
+              }],
+            };
+            driveSource?.setData(roadGeoJSON);
+          }
+        }, 200);
+      }
     }
 
     function onMouseLeave() {
       clearRouteDisplay();
+      lastStationCrs = null;
       if (map) map.getCanvas().style.cursor = '';
     }
 

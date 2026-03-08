@@ -1,4 +1,4 @@
-export type LayerId = 'sunshine' | 'house_price';
+export type LayerId = 'sunshine' | 'house_price' | 'crime';
 
 export interface LayerStats {
   mean: number;

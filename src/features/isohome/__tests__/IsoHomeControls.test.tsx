@@ -19,9 +19,10 @@ const defaultProps = {
   layerWeights: [
     { id: 'sunshine' as const, label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: { mean: 1414.8, stddev: 287.3 } },
     { id: 'house_price' as const, label: 'House price', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 192049, stddev: 76572 } },
+    { id: 'crime' as const, label: 'Crime rate', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 51.8, stddev: 13.5 } },
   ],
   onLayerWeightsChange: vi.fn(),
-  colormap: 'viridis' as const,
+  colormap: 'jet' as const,
   onColormapChange: vi.fn(),
 };
 
@@ -152,6 +153,6 @@ describe('IsoHomeControls', () => {
     render(<IsoHomeControls {...defaultProps} />);
     await userEvent.click(screen.getByText('Desirability layers'));
     expect(screen.getByText('Colormap')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Viridis')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Jet')).toBeInTheDocument();
   });
 });

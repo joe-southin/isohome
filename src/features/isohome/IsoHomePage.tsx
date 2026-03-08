@@ -25,8 +25,9 @@ export function IsoHomePage() {
   const [layerWeights, setLayerWeights] = useState<LayerWeight[]>([
     { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: { mean: 1414.8, stddev: 287.3 } },
     { id: 'house_price', label: 'House price', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 192049, stddev: 76572 } },
+    { id: 'crime', label: 'Crime rate', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 51.8, stddev: 13.5 } },
   ]);
-  const [colormap, setColormap] = useState<Colormap>('viridis');
+  const [colormap, setColormap] = useState<Colormap>('jet');
 
   const selectedMinutes = TIME_BUCKETS[selectedMinutesIndex];
 
@@ -73,8 +74,14 @@ export function IsoHomePage() {
     staleTime: Infinity,
   });
 
+  const { data: crimeData } = useQuery({
+    queryKey: ['static', 'crime'],
+    queryFn: () => fetch('/api/static/crime').then((r) => r.json()),
+    staleTime: Infinity,
+  });
+
   const costScores = useMemo<CostPoint[]>(() => {
-    if (!mergedIsochrone || !sunshineData || !housePriceData) return [];
+    if (!mergedIsochrone || !sunshineData || !housePriceData || !crimeData) return [];
     const activeWeights = layerWeights.filter((l) => l.enabled && l.weight > 0);
     if (activeWeights.length === 0) return [];
     try {
@@ -84,12 +91,13 @@ export function IsoHomePage() {
       return computeCostField(points, activeWeights, {
         sunshine: sunshineData,
         house_price: housePriceData,
+        crime: crimeData,
       });
     } catch (e) {
       console.error('computeCostField failed:', e);
       return [];
     }
-  }, [mergedIsochrone, sunshineData, housePriceData, layerWeights]);
+  }, [mergedIsochrone, sunshineData, housePriceData, crimeData, layerWeights]);
 
   const handleTerminiChange = (crs: string, selected: boolean) => {
     setSelectedTermini((prev) => {

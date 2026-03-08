@@ -33,6 +33,55 @@ REACT SPA
   Multi-select termini + time slider + layer toggles
 ```
 
+### Desirability heatmap
+
+Beyond showing *where* you can commute from, IsoHome answers **which of those places is actually desirable** by overlaying weighted data layers as a heatmap inside the isochrone boundary.
+
+Three layers are included:
+
+| Layer | Source | Value | Directionality |
+|-------|--------|-------|----------------|
+| **Sunshine** | Met Office UK climate averages | Annual sunshine hours (900-1900 h/yr) | Higher = better |
+| **House price** | Land Registry Price Paid Data | Median price in GBP (£80k-£2M) | Lower = better |
+| **Crime rate** | [data.police.uk](https://data.police.uk/) bulk data | Crimes per 1,000 pop/yr (15-250) | Lower = better |
+
+Each layer is a static GeoJSON file of Point features with `properties.value`. The data is served from Cloudflare R2 via `/api/static/{layer}` and fetched once per session (TanStack Query, `staleTime: Infinity`).
+
+#### How the desirability index works
+
+The score at each sample point is computed client-side in three steps:
+
+1. **Grid sampling**: A 0.05° (~5 km) grid is generated over the isochrone bounding box, then clipped to the isochrone polygon using `@turf/boolean-point-in-polygon`.
+
+2. **Standard scalar normalisation**: Each layer's raw value is z-scored against fixed population statistics, then mapped to 0-1 via a sigmoid:
+
+   ```
+   z = (raw_value - population_mean) / population_stddev
+   norm = 1 / (1 + exp(-z))
+   ```
+
+   This ensures scores are stable regardless of which isochrone is visible. A value at the population mean always maps to 0.5; values 2 standard deviations above map to ~0.88.
+
+   For "lower is better" layers (house price, crime), the normalised score is inverted: `norm = 1 - norm`.
+
+3. **Weighted average**: Each layer's normalised score is multiplied by the user's weight (0-10) and averaged:
+
+   ```
+   score = sum(norm_i * weight_i) / sum(weight_i)
+   ```
+
+   Setting a weight to 0 or unchecking a layer excludes it entirely.
+
+The resulting `CostPoint[]` array is rendered as a Mapbox GL heatmap layer with zoom-adaptive radius (smooth at all zoom levels). Two colormaps are available: Jet (default) and Viridis.
+
+#### Population statistics
+
+| Layer | Mean | Std Dev |
+|-------|------|---------|
+| Sunshine | 1414.8 h | 287.3 h |
+| House price | £192,049 | £76,572 |
+| Crime rate | 51.8 /1k | 13.5 /1k |
+
 ### Data sources
 
 | Data | Source | Notes |
@@ -41,6 +90,9 @@ REACT SPA
 | Drive-time polygons | [OpenRouteService](https://openrouteservice.org/) (self-hosted Docker) | Full GB road network from OSM |
 | Rail line geometry | [OpenStreetMap](https://www.openstreetmap.org/) via Overpass API | `railway=rail, usage=main` |
 | Station locations | Curated list of 116 UK mainline stations | CRS code, name, lat/lon |
+| Sunshine hours | [Met Office](https://www.metoffice.gov.uk/research/climate/maps-and-data/uk-climate-averages) UK climate averages | 0.1° grid, ~11.6k points |
+| House prices | [Land Registry](https://www.gov.uk/government/statistical-data-sets/price-paid-data-downloads) Price Paid Data | Postcode district centroids, ~2.8k points |
+| Crime rates | [data.police.uk](https://data.police.uk/data/) bulk download | LSOA-level, England & Wales, ~3k points |
 | Base map | [Mapbox GL JS](https://www.mapbox.com/) | `light-v11` style |
 
 ## Setup

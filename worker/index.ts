@@ -94,6 +94,11 @@ export default {
       return handleStatic('house-prices', env);
     }
 
+    // GET /api/static/crime
+    if (url.pathname === '/api/static/crime') {
+      return handleStatic('crime', env);
+    }
+
     // Non-API routes: let the assets binding handle it (serves index.html for SPA)
     return env.ASSETS.fetch(request);
   },

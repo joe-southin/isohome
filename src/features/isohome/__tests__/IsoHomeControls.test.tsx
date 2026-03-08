@@ -17,8 +17,8 @@ const defaultProps = {
   isLoading: false,
   error: null,
   layerWeights: [
-    { id: 'sunshine' as const, label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true },
-    { id: 'house_price' as const, label: 'House price', weight: 5, enabled: true, higherIsBetter: false },
+    { id: 'sunshine' as const, label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: { mean: 1414.8, stddev: 287.3 } },
+    { id: 'house_price' as const, label: 'House price', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 192049, stddev: 76572 } },
   ],
   onLayerWeightsChange: vi.fn(),
   colormap: 'viridis' as const,

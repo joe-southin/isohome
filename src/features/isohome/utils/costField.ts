@@ -100,17 +100,9 @@ export function computeCostField(
     }
   }
 
-  // Compute min/max per layer
-  const layerMinMax = new Map<LayerId, { min: number; max: number }>();
-  for (const layer of activeLayers) {
-    const values = layerValues.get(layer.id)!;
-    if (values.length === 0) return [];
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    layerMinMax.set(layer.id, { min, max });
-  }
-
-  // Compute scores
+  // Compute scores using z-score normalisation with sigmoid mapping.
+  // Uses fixed population stats (mean/stddev) so scores are stable
+  // regardless of which isochrone region is visible.
   const totalWeight = activeLayers.reduce((sum, l) => sum + l.weight, 0);
   const results: CostPoint[] = [];
 
@@ -121,9 +113,13 @@ export function computeCostField(
 
     let score = 0;
     for (const layer of activeLayers) {
-      const { min, max } = layerMinMax.get(layer.id)!;
       const raw = vals.get(layer.id)!;
-      let norm = min === max ? 0.5 : (raw - min) / (max - min);
+      const { mean, stddev } = layer.stats;
+      // Z-score: how many stddevs from the population mean
+      const z = stddev === 0 ? 0 : (raw - mean) / stddev;
+      // Sigmoid maps z-score to 0–1 (z=0 → 0.5, z=+2 → ~0.88, z=-2 → ~0.12)
+      let norm = 1 / (1 + Math.exp(-z));
+      // Invert for "lower is better" layers (house price, crime)
       if (!layer.higherIsBetter) norm = 1 - norm;
       score += norm * layer.weight;
     }

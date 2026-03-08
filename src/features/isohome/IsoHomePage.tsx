@@ -23,8 +23,8 @@ export function IsoHomePage() {
   const [showRailLines, setShowRailLines] = useState(false);
   const [showRouteInfo, setShowRouteInfo] = useState(true);
   const [layerWeights, setLayerWeights] = useState<LayerWeight[]>([
-    { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true },
-    { id: 'house_price', label: 'House price', weight: 5, enabled: true, higherIsBetter: false },
+    { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: { mean: 1414.8, stddev: 287.3 } },
+    { id: 'house_price', label: 'House price', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 192049, stddev: 76572 } },
   ]);
   const [colormap, setColormap] = useState<Colormap>('viridis');
 

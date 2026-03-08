@@ -40,6 +40,10 @@ function makePointGrid(
   };
 }
 
+// Test stats centred on the test data ranges
+const sunshineStats = { mean: 1400, stddev: 400 };
+const housePriceStats = { mean: 300000, stddev: 200000 };
+
 describe('generateSampleGrid', () => {
   it('generates points inside a square polygon', () => {
     const iso = makeSquareIsochrone(-1.0, 51.0, -0.8, 51.2);
@@ -58,7 +62,6 @@ describe('generateSampleGrid', () => {
   it('returns empty array for a tiny polygon smaller than spacing', () => {
     const iso = makeSquareIsochrone(-1.0, 51.0, -1.0 + 0.001, 51.0 + 0.001);
     const points = generateSampleGrid(iso, 0.05);
-    // May or may not contain a point depending on alignment, but shouldn't crash
     expect(Array.isArray(points)).toBe(true);
   });
 
@@ -118,95 +121,95 @@ describe('computeCostField', () => {
     [0.1, 50.0],
   ];
 
-  it('computes scores with both layers equal weight', () => {
+  it('sigmoid normalisation maps mean value to 0.5', () => {
+    // A value exactly at the mean should get norm=0.5
+    const meanGrid = makePointGrid([
+      { lng: 0.0, lat: 50.0, value: 1400 }, // exactly at mean
+    ]);
     const layers: LayerWeight[] = [
-      { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true },
-      { id: 'house_price', label: 'House price', weight: 5, enabled: true, higherIsBetter: false },
+      { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: sunshineStats },
     ];
-
-    const result = computeCostField(points, layers, {
-      sunshine: sunshineGrid,
+    const result = computeCostField([[0.0, 50.0]], layers, {
+      sunshine: meanGrid,
       house_price: housePriceGrid,
     });
-
-    expect(result.length).toBe(3);
-
-    // Point at [0.1, 50.0]: low sunshine (norm=0) but cheapest (norm=1 after invert) → score 0.5
-    // Point at [0.0, 50.0]: high sunshine (norm=1) but most expensive (norm=0 after invert) → score 0.5
-    // Point at [0.05, 50.0]: mid sunshine (norm=0.5) mid price (norm=0.5 after invert) → score 0.5
-    // All should be 0.5 with equal weights
-    for (const p of result) {
-      expect(p.score).toBeCloseTo(0.5, 5);
-    }
+    expect(result[0].score).toBeCloseTo(0.5, 5);
   });
 
-  it('favours sunshine when sunshine weight is higher', () => {
+  it('higher-is-better layer scores above-mean values > 0.5', () => {
     const layers: LayerWeight[] = [
-      { id: 'sunshine', label: 'Sunshine', weight: 10, enabled: true, higherIsBetter: true },
-      { id: 'house_price', label: 'House price', weight: 0, enabled: true, higherIsBetter: false },
+      { id: 'sunshine', label: 'Sunshine', weight: 10, enabled: true, higherIsBetter: true, stats: sunshineStats },
     ];
-
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
     });
-
-    // weight 0 means house_price is excluded
-    // Only sunshine matters: [0.0, 50.0] has highest sunshine → score 1.0
+    // 1800 is +1 stddev above mean → sigmoid(1) ≈ 0.73
     const best = result[0];
     expect(best.lng).toBe(0.0);
-    expect(best.score).toBeCloseTo(1.0, 5);
-
+    expect(best.score).toBeGreaterThan(0.5);
+    // 1000 is -1 stddev below mean → sigmoid(-1) ≈ 0.27
     const worst = result[result.length - 1];
     expect(worst.lng).toBe(0.1);
-    expect(worst.score).toBeCloseTo(0.0, 5);
+    expect(worst.score).toBeLessThan(0.5);
+  });
+
+  it('lower-is-better layer inverts scores (cheap = high score)', () => {
+    const layers: LayerWeight[] = [
+      { id: 'house_price', label: 'House price', weight: 10, enabled: true, higherIsBetter: false, stats: housePriceStats },
+    ];
+    const result = computeCostField(points, layers, {
+      sunshine: sunshineGrid,
+      house_price: housePriceGrid,
+    });
+    // Cheapest (100k) should score highest (inverted)
+    const best = result[0];
+    expect(best.lng).toBe(0.1);
+    expect(best.score).toBeGreaterThan(0.5);
+    // Most expensive (500k) should score lowest
+    const worst = result[result.length - 1];
+    expect(worst.lng).toBe(0.0);
+    expect(worst.score).toBeLessThan(0.5);
   });
 
   it('returns empty array when all weights are 0', () => {
     const layers: LayerWeight[] = [
-      { id: 'sunshine', label: 'Sunshine', weight: 0, enabled: true, higherIsBetter: true },
-      { id: 'house_price', label: 'House price', weight: 0, enabled: true, higherIsBetter: false },
+      { id: 'sunshine', label: 'Sunshine', weight: 0, enabled: true, higherIsBetter: true, stats: sunshineStats },
+      { id: 'house_price', label: 'House price', weight: 0, enabled: true, higherIsBetter: false, stats: housePriceStats },
     ];
-
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
     });
-
     expect(result).toEqual([]);
   });
 
   it('returns empty array when no layers are enabled', () => {
     const layers: LayerWeight[] = [
-      { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: false, higherIsBetter: true },
-      { id: 'house_price', label: 'House price', weight: 5, enabled: false, higherIsBetter: false },
+      { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: false, higherIsBetter: true, stats: sunshineStats },
+      { id: 'house_price', label: 'House price', weight: 5, enabled: false, higherIsBetter: false, stats: housePriceStats },
     ];
-
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
     });
-
     expect(result).toEqual([]);
   });
 
-  it('handles min === max for a layer (all values same)', () => {
+  it('handles stddev === 0 (all values same)', () => {
     const uniformGrid = makePointGrid([
       { lng: 0.0, lat: 50.0, value: 1500 },
       { lng: 0.05, lat: 50.0, value: 1500 },
       { lng: 0.1, lat: 50.0, value: 1500 },
     ]);
-
     const layers: LayerWeight[] = [
-      { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true },
+      { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: { mean: 1500, stddev: 0 } },
     ];
-
     const result = computeCostField(points, layers, {
       sunshine: uniformGrid,
       house_price: housePriceGrid,
     });
-
-    // All normalised to 0.5 when min===max
+    // z=0 → sigmoid(0)=0.5 for all points
     for (const p of result) {
       expect(p.score).toBeCloseTo(0.5, 5);
     }
@@ -215,40 +218,50 @@ describe('computeCostField', () => {
   it('excludes points with no data coverage', () => {
     const sparseGrid = makePointGrid([
       { lng: 0.0, lat: 50.0, value: 1500 },
-      // No data near [0.05, 50.0] or [0.1, 50.0] — they're within 0.15° so they'll match
     ]);
-
     const farPoints: [number, number][] = [
       [0.0, 50.0],
       [5.0, 55.0], // far away, no data
     ];
-
     const layers: LayerWeight[] = [
-      { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true },
+      { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: sunshineStats },
     ];
-
     const result = computeCostField(farPoints, layers, {
       sunshine: sparseGrid,
       house_price: housePriceGrid,
     });
-
-    // The far-away point should be excluded
     expect(result.length).toBe(1);
     expect(result[0].lng).toBe(0.0);
   });
 
   it('results are sorted by score descending', () => {
     const layers: LayerWeight[] = [
-      { id: 'sunshine', label: 'Sunshine', weight: 10, enabled: true, higherIsBetter: true },
+      { id: 'sunshine', label: 'Sunshine', weight: 10, enabled: true, higherIsBetter: true, stats: sunshineStats },
     ];
-
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
     });
-
     for (let i = 1; i < result.length; i++) {
       expect(result[i - 1].score).toBeGreaterThanOrEqual(result[i].score);
+    }
+  });
+
+  it('weighted blend produces intermediate scores', () => {
+    // Sunshine only weight=10, house price weight=5
+    const layers: LayerWeight[] = [
+      { id: 'sunshine', label: 'Sunshine', weight: 10, enabled: true, higherIsBetter: true, stats: sunshineStats },
+      { id: 'house_price', label: 'House price', weight: 5, enabled: true, higherIsBetter: false, stats: housePriceStats },
+    ];
+    const result = computeCostField(points, layers, {
+      sunshine: sunshineGrid,
+      house_price: housePriceGrid,
+    });
+    expect(result.length).toBe(3);
+    // All scores should be between 0 and 1
+    for (const p of result) {
+      expect(p.score).toBeGreaterThanOrEqual(0);
+      expect(p.score).toBeLessThanOrEqual(1);
     }
   });
 });

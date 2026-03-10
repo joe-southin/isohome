@@ -21,3 +21,13 @@ export interface CostPoint {
 }
 
 export type Colormap = 'viridis' | 'jet';
+
+export type TransportModeId = 'train' | 'car' | 'walk' | 'tube';
+
+export interface TransportMode {
+  id: TransportModeId;
+  label: string;
+  icon: string;
+  enabled: boolean;
+  available: boolean; // false = coming soon
+}

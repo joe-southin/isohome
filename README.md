@@ -33,6 +33,14 @@ REACT SPA
   Multi-select termini + time slider + layer toggles
 ```
 
+Key architectural patterns:
+
+- **Pre-computation over runtime computation**: All expensive GIS operations (polygon union, drive-time polygon calculation) happen offline at build time. The Cloudflare Worker is a pure R2 proxy with zero computation, so serving a request is just a key-value lookup.
+- **Checkpoint/resume pipeline**: The Python pipeline tracks completed work in `scripts/data/checkpoint.json`, making it safe to interrupt and restart without re-doing finished steps. `recompute_isochrones.py` goes further and auto-restarts the local ORS Docker container if it crashes mid-run.
+- **Rate limiting**: The pipeline includes configurable delays between API calls (0.2s for Transport API, 1.5s for the public ORS endpoint) to avoid throttling.
+- **TanStack Query orchestration**: The frontend fires parallel queries for multiple terminus isochrones using `useQueries`, with `staleTime: Infinity` for static data (stations, rail lines, environmental layers) that only needs fetching once per session.
+- **Graceful degradation**: MSW (Mock Service Worker) provides a full mock API layer for development, so the frontend runs without any backend (`VITE_USE_MOCKS=true`).
+
 ### Desirability heatmap
 
 Beyond showing *where* you can commute from, IsoHome answers **which of those places is actually desirable** by overlaying weighted data layers as a heatmap inside the isochrone boundary.
@@ -72,6 +80,8 @@ The score at each sample point is computed client-side in three steps:
 
    Setting a weight to 0 or unchecking a layer excludes it entirely.
 
+4. **Nearest-neighbour lookup**: Each grid point finds the closest data point in the layer's GeoJSON using squared Euclidean distance, with a 0.15° (~15 km) threshold to avoid extrapolation into data-sparse areas. This is a linear scan per query — fast enough given the ~5 km grid density.
+
 The resulting `CostPoint[]` array is rendered as a Mapbox GL heatmap layer with zoom-adaptive radius (smooth at all zoom levels). Two colormaps are available: Jet (default) and Viridis.
 
 #### Population statistics
@@ -88,7 +98,7 @@ The resulting `CostPoint[]` array is rendered as a Mapbox GL heatmap layer with 
 |------|--------|-------|
 | Train journey times | [Transport API](https://www.transportapi.com/) timetable endpoint | Morning peak, next Tuesday |
 | Drive-time polygons | [OpenRouteService](https://openrouteservice.org/) (self-hosted Docker) | Full GB road network from OSM |
-| Rail line geometry | [OpenStreetMap](https://www.openstreetmap.org/) via Overpass API | `railway=rail, usage=main` |
+| Rail line geometry | [OpenStreetMap](https://www.openstreetmap.org/) via Overpass API | `railway=rail, usage=main`, Douglas-Peucker simplified at 0.001° (~100 m) |
 | Station locations | Curated list of 116 UK mainline stations | CRS code, name, lat/lon |
 | Sunshine hours | [Met Office](https://www.metoffice.gov.uk/research/climate/maps-and-data/uk-climate-averages) UK climate averages | 0.1° grid, ~11.6k points |
 | House prices | [Land Registry](https://www.gov.uk/government/statistical-data-sets/price-paid-data-downloads) Price Paid Data | Postcode district centroids, ~2.8k points |
@@ -230,13 +240,14 @@ python -m pytest scripts/tests/ --cov=scripts/precompute  # with coverage
 
 ### Adding a new data layer
 
-Future layers (house prices, school ratings, sunshine hours, etc.) follow the pattern:
+Additional layers follow the same pattern as sunshine, house price, and crime:
 
 1. Create a precomputation script in `scripts/precompute/` that produces GeoJSON
 2. Upload the GeoJSON to R2 under `static/`
 3. Add a Worker endpoint in `worker/index.ts`
 4. Add a toggle in `IsoHomeControls.tsx` and a map layer in `IsoHomeMap.tsx`
 5. Fetch via TanStack Query with `staleTime: Infinity`
+6. Add population statistics (mean, stddev) to `costField.ts` for z-score normalisation
 
 ### Adding a transport mode
 
@@ -257,7 +268,7 @@ isohome/
 │   │   ├── IsoHomePage.tsx     # Page component with TanStack Query
 │   │   ├── IsoHomeControls.tsx # Multi-select + slider + toggles
 │   │   ├── IsoHomeMap.tsx      # Mapbox GL JS wrapper
-│   │   ├── utils/              # formatTime, sliderIndex
+│   │   ├── utils/              # costField (z-score scoring), formatTime, sliderIndex
 │   │   └── __tests__/          # Vitest tests
 │   ├── mocks/                  # MSW handlers + fixtures
 │   ├── App.tsx                 # Router

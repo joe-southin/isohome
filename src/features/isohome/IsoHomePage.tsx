@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { IsoHomeControls } from './IsoHomeControls';
 import { IsoHomeMap } from './IsoHomeMap';
+import type { IsoHomeMapHandle } from './IsoHomeMap';
+import { SearchBox } from './SearchBox';
 import { LONDON_TERMINI, TIME_BUCKETS } from './config';
 import { generateSampleGrid, computeCostField } from './utils/costField';
 import type { FeatureCollection, Polygon, MultiPolygon } from 'geojson';
@@ -26,6 +28,7 @@ const DEFAULT_TRANSPORT_MODES: TransportMode[] = [
 const DEFAULT_WALK_CAP = 15; // minutes
 
 export function IsoHomePage() {
+  const mapRef = useRef<IsoHomeMapHandle>(null);
   const [selectedTermini, setSelectedTermini] = useState<string[]>(['KGX']);
   const [selectedMinutesIndex, setSelectedMinutesIndex] = useState(2); // 60 min
   const [showStations, setShowStations] = useState(false);
@@ -37,6 +40,7 @@ export function IsoHomePage() {
     { id: 'sunshine', label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: { mean: 1660.8, stddev: 146.5 } },
     { id: 'house_price', label: 'House price', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 192049, stddev: 76572 } },
     { id: 'crime', label: 'Crime rate', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 51.8, stddev: 13.5 } },
+    { id: 'deprivation', label: 'Deprivation', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 23.6, stddev: 11.8 } },
   ]);
   const [colormap, setColormap] = useState<Colormap>('jet');
 
@@ -116,8 +120,14 @@ export function IsoHomePage() {
     staleTime: Infinity,
   });
 
+  const { data: deprivationData } = useQuery({
+    queryKey: ['static', 'deprivation'],
+    queryFn: () => fetch('/api/static/deprivation').then((r) => r.json()),
+    staleTime: Infinity,
+  });
+
   const costScores = useMemo<CostPoint[]>(() => {
-    if (!mergedIsochrone || !sunshineData || !housePriceData || !crimeData) return [];
+    if (!mergedIsochrone || !sunshineData || !housePriceData || !crimeData || !deprivationData) return [];
     const activeWeights = layerWeights.filter((l) => l.enabled && l.weight > 0);
     if (activeWeights.length === 0) return [];
     try {
@@ -128,12 +138,13 @@ export function IsoHomePage() {
         sunshine: sunshineData,
         house_price: housePriceData,
         crime: crimeData,
+        deprivation: deprivationData,
       });
     } catch (e) {
       console.error('computeCostField failed:', e);
       return [];
     }
-  }, [mergedIsochrone, sunshineData, housePriceData, crimeData, layerWeights]);
+  }, [mergedIsochrone, sunshineData, housePriceData, crimeData, deprivationData, layerWeights]);
 
   const handleTerminiChange = (crs: string, selected: boolean) => {
     setSelectedTermini((prev) => {
@@ -149,6 +160,10 @@ export function IsoHomePage() {
   const handleDeselectAll = () => {
     setSelectedTermini([]);
   };
+
+  const handleSearchSelect = useCallback((lng: number, lat: number, zoom: number) => {
+    mapRef.current?.flyTo(lng, lat, zoom);
+  }, []);
 
   const handleTransportModeChange = (id: TransportModeId, enabled: boolean) => {
     setTransportModes((prev) =>
@@ -182,7 +197,9 @@ export function IsoHomePage() {
         colormap={colormap}
         onColormapChange={setColormap}
       />
+      <SearchBox onSelect={handleSearchSelect} />
       <IsoHomeMap
+        ref={mapRef}
         isochroneData={mergedIsochrone}
         stationsData={stationsData}
         railLinesData={railLinesData}

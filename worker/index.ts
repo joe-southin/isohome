@@ -112,6 +112,11 @@ export default {
       return handleStatic('crime', env);
     }
 
+    // GET /api/static/deprivation
+    if (url.pathname === '/api/static/deprivation') {
+      return handleStatic('deprivation', env);
+    }
+
     // Non-API routes: let the assets binding handle it (serves index.html for SPA)
     return env.ASSETS.fetch(request);
   },

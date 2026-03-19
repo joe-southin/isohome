@@ -17,20 +17,84 @@ For example, Clophill in Bedfordshire (10-minute drive to Flitwick + 41-minute t
 ### Architecture
 
 ```
-PRE-COMPUTATION (Python, offline)
-  Transport API → journey times per station × terminus
-  ORS Docker    → drive-time polygon per station
-  Shapely       → union polygons → GeoJSON files
-  boto3         → upload to Cloudflare R2
-
-CLOUDFLARE WORKER (runtime, no computation)
-  GET /api/isochrone/:crs/:minutes  → R2 → GeoJSON
-  GET /api/static/stations          → R2 → GeoJSON
-  GET /api/static/rail-lines        → R2 → GeoJSON
-
-REACT SPA
-  Mapbox GL JS map + TanStack Query + Tailwind CSS
-  Multi-select termini + time slider + layer toggles
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        PRE-COMPUTATION (Python, offline)                │
+│                                                                         │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────────┐    │
+│  │ Transport API │   │  ORS Docker  │   │    Static Data Sources   │    │
+│  │  (timetable)  │   │ (self-hosted)│   │                          │    │
+│  └──────┬───────┘   └──────┬───────┘   │  Met Office (sunshine)   │    │
+│         │                  │            │  Land Registry (prices)  │    │
+│         ▼                  ▼            │  data.police.uk (crime)  │    │
+│  journey_times      drive-time          │  IoD25 (deprivation)     │    │
+│  per station ×      polygons per        │  OSM Overpass (rail)     │    │
+│  terminus           station             └───────────┬──────────────┘    │
+│         │                  │                        │                   │
+│         ▼                  ▼                        ▼                   │
+│  ┌─────────────────────────────────────────────────────────────┐       │
+│  │                    Pipeline Scripts                          │       │
+│  │  fetch_journey_times.py  →  compute_isochrones.py           │       │
+│  │  enrich_isochrones.py    →  compute_rail_routes.py          │       │
+│  │  compute_walk_isochrones.py                                 │       │
+│  │  generate_sunshine.py / generate_house_prices.py            │       │
+│  │  generate_crime.py / generate_deprivation.py                │       │
+│  │  convert_rail_gis.py                                        │       │
+│  └──────────────────────────┬──────────────────────────────────┘       │
+│                             │                                           │
+│                             ▼                                           │
+│                    output/ (GeoJSON files)                              │
+│                     ├── isochrones/{CRS}/{min}.geojson                  │
+│                     ├── isochrones/walk/{CRS}/{min}.geojson             │
+│                     └── static/*.geojson                                │
+│                             │                                           │
+│                             ▼                                           │
+│                   upload_to_r2.py (boto3)                               │
+└─────────────────────────────┬───────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        CLOUDFLARE (runtime)                             │
+│                                                                         │
+│  ┌──────────────────┐          ┌──────────────────────────────┐        │
+│  │    R2 Bucket      │◄────────│     Cloudflare Worker        │        │
+│  │   "isohome"       │────────►│     (zero computation)       │        │
+│  │                   │         │                              │        │
+│  │  isochrones/      │         │  /api/isochrone/:crs/:min   │        │
+│  │  isochrones/walk/ │         │  /api/isochrone/walk/:crs/… │        │
+│  │  static/          │         │  /api/static/stations       │        │
+│  │   stations.geojson│         │  /api/static/rail-lines     │        │
+│  │   sunshine.geojson│         │  /api/static/sunshine       │        │
+│  │   house-prices…   │         │  /api/static/house-prices   │        │
+│  │   crime.geojson   │         │  /api/static/deprivation    │        │
+│  │   deprivation…    │         │  /api/static/crime          │        │
+│  └──────────────────┘          └──────────────┬───────────────┘        │
+│                                               │                        │
+│                        ┌──────────────────────┘                        │
+│                        │  + serves SPA via Assets binding              │
+└────────────────────────┼────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         REACT SPA (browser)                             │
+│                                                                         │
+│  ┌─────────────────┐  ┌───────────────────┐  ┌────────────────────┐   │
+│  │  TanStack Query  │  │   Mapbox GL JS    │  │  Client-side       │   │
+│  │                  │  │                   │  │  Scoring Engine     │   │
+│  │  useQueries()    │  │  Isochrone fill   │  │                    │   │
+│  │  parallel fetch  │  │  Walk circles     │  │  z-score normalize │   │
+│  │  staleTime:∞     │  │  Route hover      │  │  weighted average  │   │
+│  │  for static data │  │  Station dots     │  │  heatmap render    │   │
+│  └────────┬────────┘  │  Rail lines       │  │  (costField.ts)    │   │
+│           │           │  Search geocode   │  └────────────────────┘   │
+│           │           │  Heatmap layer    │                           │
+│           ▼           └───────────────────┘                           │
+│  ┌─────────────────────────────────────────────────────────────┐      │
+│  │                  IsoHomeControls                             │      │
+│  │  Terminus multi-select │ Time slider │ Transport modes      │      │
+│  │  Desirability layers (sunshine, price, crime, deprivation)  │      │
+│  │  Colormap picker │ Map overlays │ Search box                │      │
+│  └─────────────────────────────────────────────────────────────┘      │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 Key architectural patterns:
@@ -45,13 +109,14 @@ Key architectural patterns:
 
 Beyond showing *where* you can commute from, IsoHome answers **which of those places is actually desirable** by overlaying weighted data layers as a heatmap inside the isochrone boundary.
 
-Three layers are included:
+Four layers are included:
 
 | Layer | Source | Value | Directionality |
 |-------|--------|-------|----------------|
 | **Sunshine** | Met Office UK climate averages | Annual sunshine hours (900-1900 h/yr) | Higher = better |
 | **House price** | Land Registry Price Paid Data | Median price in GBP (£80k-£2M) | Lower = better |
 | **Crime rate** | [data.police.uk](https://data.police.uk/) bulk data | Crimes per 1,000 pop/yr (15-250) | Lower = better |
+| **Deprivation** | English Indices of Deprivation 2025 (MHCLG) | IMD Score (0-80+) | Lower = better |
 
 Each layer is a static GeoJSON file of Point features with `properties.value`. The data is served from Cloudflare R2 via `/api/static/{layer}` and fetched once per session (TanStack Query, `staleTime: Infinity`).
 
@@ -88,9 +153,10 @@ The resulting `CostPoint[]` array is rendered as a Mapbox GL heatmap layer with 
 
 | Layer | Mean | Std Dev |
 |-------|------|---------|
-| Sunshine | 1414.8 h | 287.3 h |
+| Sunshine | 1660.8 h | 146.5 h |
 | House price | £192,049 | £76,572 |
 | Crime rate | 51.8 /1k | 13.5 /1k |
+| Deprivation | 23.6 IMD | 11.8 IMD |
 
 ### Data sources
 
@@ -103,6 +169,7 @@ The resulting `CostPoint[]` array is rendered as a Mapbox GL heatmap layer with 
 | Sunshine hours | [Met Office](https://www.metoffice.gov.uk/research/climate/maps-and-data/uk-climate-averages) UK climate averages | 0.1° grid, ~11.6k points |
 | House prices | [Land Registry](https://www.gov.uk/government/statistical-data-sets/price-paid-data-downloads) Price Paid Data | Postcode district centroids, ~2.8k points |
 | Crime rates | [data.police.uk](https://data.police.uk/data/) bulk download | LSOA-level, England & Wales, ~3k points |
+| Deprivation | [English Indices of Deprivation 2025](https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025) (MHCLG) | IMD Score per LSOA, ~33k areas |
 | Base map | [Mapbox GL JS](https://www.mapbox.com/) | `light-v11` style |
 
 ## Setup

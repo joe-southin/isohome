@@ -5,6 +5,7 @@ import railLines from './fixtures/rail-lines.json';
 import sunshine from './fixtures/sunshine.json';
 import housePrices from './fixtures/house-prices.json';
 import crime from './fixtures/crime.json';
+import deprivation from './fixtures/deprivation.json';
 
 const VALID_CRS = ['KGX', 'PAD', 'WAT', 'VIC', 'LST', 'BFR', 'CST', 'CHX', 'EUS', 'MYB'];
 const VALID_BUCKETS = ['30', '45', '60', '75', '90', '120'];
@@ -37,4 +38,5 @@ export const handlers = [
   http.get('/api/static/sunshine', () => HttpResponse.json(sunshine)),
   http.get('/api/static/house-prices', () => HttpResponse.json(housePrices)),
   http.get('/api/static/crime', () => HttpResponse.json(crime)),
+  http.get('/api/static/deprivation', () => HttpResponse.json(deprivation)),
 ];

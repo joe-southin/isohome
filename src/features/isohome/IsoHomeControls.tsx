@@ -252,22 +252,19 @@ export function IsoHomeControls({
           </button>
 
           {layerPanelOpen && (
-            <div className="space-y-3 mt-2">
+            <div className="space-y-1.5 mt-2">
               {layerWeights.map((layer) => (
-                <div key={layer.id} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <label className="flex items-center gap-1.5">
-                      <input
-                        type="checkbox"
-                        checked={layer.enabled}
-                        onChange={(e) =>
-                          updateLayer(layer.id, { enabled: e.target.checked })
-                        }
-                      />
-                      {layer.label}
-                    </label>
-                    <span className="text-gray-500 tabular-nums">{layer.weight}</span>
-                  </div>
+                <div key={layer.id} className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={layer.enabled}
+                    onChange={(e) =>
+                      updateLayer(layer.id, { enabled: e.target.checked })
+                    }
+                    aria-label={`Enable ${layer.label}`}
+                    className="shrink-0"
+                  />
+                  <span className="w-20 shrink-0 truncate">{layer.label}</span>
                   <input
                     type="range"
                     min={0}
@@ -278,9 +275,12 @@ export function IsoHomeControls({
                     onChange={(e) =>
                       updateLayer(layer.id, { weight: Number(e.target.value) })
                     }
-                    className="w-full"
+                    className="flex-1 min-w-0"
                     aria-label={`${layer.label} weight`}
                   />
+                  <span className="w-4 text-right text-gray-500 tabular-nums shrink-0">
+                    {layer.weight}
+                  </span>
                 </div>
               ))}
 

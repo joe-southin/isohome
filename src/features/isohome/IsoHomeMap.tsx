@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { GeoJSON } from 'geojson';
@@ -39,6 +39,10 @@ interface IsoHomeMapProps {
   carEnabled: boolean;
   walkIsochroneData: GeoJSON | undefined;
   walkCap: number;
+}
+
+export interface IsoHomeMapHandle {
+  flyTo: (lng: number, lat: number, zoom: number) => void;
 }
 
 /** Ray-casting point-in-polygon test for a single exterior ring */
@@ -252,7 +256,7 @@ interface RouteInfo {
   walkMode: boolean;
 }
 
-export function IsoHomeMap({
+export const IsoHomeMap = forwardRef<IsoHomeMapHandle, IsoHomeMapProps>(function IsoHomeMap({
   isochroneData,
   stationsData,
   railLinesData,
@@ -266,13 +270,19 @@ export function IsoHomeMap({
   carEnabled,
   walkIsochroneData,
   walkCap,
-}: IsoHomeMapProps) {
+}, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    flyTo: (lng: number, lat: number, zoom: number) => {
+      mapRef.current?.flyTo({ center: [lng, lat], zoom, duration: 1500 });
+    },
+  }));
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -706,4 +716,4 @@ export function IsoHomeMap({
       )}
     </div>
   );
-}
+});

@@ -236,12 +236,8 @@ describe('IsoHomeControls', () => {
     const onLayerWeightsChange = vi.fn();
     render(<IsoHomeControls {...defaultProps} onLayerWeightsChange={onLayerWeightsChange} />);
     await userEvent.click(screen.getByText('Desirability layers'));
-    const checkboxes = screen.getAllByRole('checkbox');
-    const sunshineCheckbox = checkboxes.find(
-      (cb) => cb.closest('label')?.textContent?.includes('Sunshine'),
-    );
-    expect(sunshineCheckbox).toBeDefined();
-    await userEvent.click(sunshineCheckbox!);
+    const sunshineCheckbox = screen.getByLabelText('Enable Sunshine');
+    await userEvent.click(sunshineCheckbox);
     expect(onLayerWeightsChange).toHaveBeenCalled();
   });
 

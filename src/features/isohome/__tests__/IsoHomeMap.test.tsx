@@ -14,6 +14,7 @@ const mockMapInstance = {
   getSource: vi.fn((_name?: string) => undefined) as ReturnType<typeof vi.fn>,
   getLayer: vi.fn((_name?: string) => undefined) as ReturnType<typeof vi.fn>,
   setLayoutProperty: vi.fn(),
+  setPaintProperty: vi.fn(),
   addControl: vi.fn(),
   queryRenderedFeatures: vi.fn(() => []),
   getCanvas: vi.fn(() => ({ style: {} })),
@@ -84,6 +85,9 @@ describe('IsoHomeMap', () => {
         isLoading={false}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     expect(screen.getByTestId('map-container')).toBeInTheDocument();
@@ -102,6 +106,9 @@ describe('IsoHomeMap', () => {
         isLoading={false}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     expect((mockMapInstance as any)._opts.center).toEqual([-2.5, 54.0]);
@@ -122,6 +129,9 @@ describe('IsoHomeMap', () => {
         isLoading={true}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     expect(screen.getByTestId('map-container').style.opacity).toBe('0.5');
@@ -140,6 +150,9 @@ describe('IsoHomeMap', () => {
         isLoading={false}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     expect(screen.getByTestId('map-container').style.opacity).toBe('1');
@@ -158,6 +171,9 @@ describe('IsoHomeMap', () => {
         isLoading={false}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     act(() => { loadCallback?.(); });
@@ -179,6 +195,9 @@ describe('IsoHomeMap', () => {
         isLoading={false}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     act(() => { loadCallback?.(); });
@@ -202,6 +221,9 @@ describe('IsoHomeMap', () => {
         isLoading={false}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     act(() => { loadCallback?.(); });
@@ -221,6 +243,9 @@ describe('IsoHomeMap', () => {
         isLoading={false}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     act(() => { loadCallback?.(); });
@@ -245,6 +270,9 @@ describe('IsoHomeMap', () => {
         isLoading={false}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     act(() => { loadCallback?.(); });
@@ -264,6 +292,9 @@ describe('IsoHomeMap', () => {
         isLoading={false}
         costScores={[]}
         colormap="viridis"
+        carEnabled={true}
+        walkIsochroneData={undefined}
+        walkCap={15}
       />,
     );
     unmount();

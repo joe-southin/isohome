@@ -115,6 +115,12 @@ describe('computeCostField', () => {
     { lng: 0.1, lat: 50.0, value: 100000 },  // cheap
   ]);
 
+  const crimeGrid = makePointGrid([
+    { lng: 0.0, lat: 50.0, value: 50 },
+    { lng: 0.05, lat: 50.0, value: 50 },
+    { lng: 0.1, lat: 50.0, value: 50 },
+  ]);
+
   const points: [number, number][] = [
     [0.0, 50.0],
     [0.05, 50.0],
@@ -132,6 +138,7 @@ describe('computeCostField', () => {
     const result = computeCostField([[0.0, 50.0]], layers, {
       sunshine: meanGrid,
       house_price: housePriceGrid,
+      crime: crimeGrid,
     });
     expect(result[0].score).toBeCloseTo(0.5, 5);
   });
@@ -143,6 +150,7 @@ describe('computeCostField', () => {
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
+      crime: crimeGrid,
     });
     // 1800 is +1 stddev above mean → sigmoid(1) ≈ 0.73
     const best = result[0];
@@ -161,6 +169,7 @@ describe('computeCostField', () => {
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
+      crime: crimeGrid,
     });
     // Cheapest (100k) should score highest (inverted)
     const best = result[0];
@@ -180,6 +189,7 @@ describe('computeCostField', () => {
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
+      crime: crimeGrid,
     });
     expect(result).toEqual([]);
   });
@@ -192,6 +202,7 @@ describe('computeCostField', () => {
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
+      crime: crimeGrid,
     });
     expect(result).toEqual([]);
   });
@@ -208,6 +219,7 @@ describe('computeCostField', () => {
     const result = computeCostField(points, layers, {
       sunshine: uniformGrid,
       house_price: housePriceGrid,
+      crime: crimeGrid,
     });
     // z=0 → sigmoid(0)=0.5 for all points
     for (const p of result) {
@@ -229,6 +241,7 @@ describe('computeCostField', () => {
     const result = computeCostField(farPoints, layers, {
       sunshine: sparseGrid,
       house_price: housePriceGrid,
+      crime: crimeGrid,
     });
     expect(result.length).toBe(1);
     expect(result[0].lng).toBe(0.0);
@@ -241,6 +254,7 @@ describe('computeCostField', () => {
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
+      crime: crimeGrid,
     });
     for (let i = 1; i < result.length; i++) {
       expect(result[i - 1].score).toBeGreaterThanOrEqual(result[i].score);
@@ -256,6 +270,7 @@ describe('computeCostField', () => {
     const result = computeCostField(points, layers, {
       sunshine: sunshineGrid,
       house_price: housePriceGrid,
+      crime: crimeGrid,
     });
     expect(result.length).toBe(3);
     // All scores should be between 0 and 1

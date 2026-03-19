@@ -2,10 +2,20 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { IsoHomeControls } from '../IsoHomeControls';
+import type { TransportMode } from '../types';
+
+const defaultTransportModes: TransportMode[] = [
+  { id: 'train', label: 'Train', icon: '🚆', enabled: true, available: true },
+  { id: 'car', label: 'Car', icon: '🚗', enabled: true, available: true },
+  { id: 'walk', label: 'Walk', icon: '🚶', enabled: false, available: true },
+  { id: 'tube', label: 'Tube', icon: '🚇', enabled: false, available: false },
+];
 
 const defaultProps = {
   selectedTermini: ['KGX'],
   onTerminiChange: vi.fn(),
+  onSelectAll: vi.fn(),
+  onDeselectAll: vi.fn(),
   selectedMinutesIndex: 2,
   onMinutesChange: vi.fn(),
   showStations: false,
@@ -14,10 +24,14 @@ const defaultProps = {
   onShowRailLinesChange: vi.fn(),
   showRouteInfo: true,
   onShowRouteInfoChange: vi.fn(),
+  transportModes: defaultTransportModes,
+  onTransportModeChange: vi.fn(),
+  walkCap: 15,
+  onWalkCapChange: vi.fn(),
   isLoading: false,
   error: null,
   layerWeights: [
-    { id: 'sunshine' as const, label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: { mean: 1414.8, stddev: 287.3 } },
+    { id: 'sunshine' as const, label: 'Sunshine', weight: 5, enabled: true, higherIsBetter: true, stats: { mean: 1660.8, stddev: 146.5 } },
     { id: 'house_price' as const, label: 'House price', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 192049, stddev: 76572 } },
     { id: 'crime' as const, label: 'Crime rate', weight: 5, enabled: true, higherIsBetter: false, stats: { mean: 51.8, stddev: 13.5 } },
   ],
@@ -30,7 +44,11 @@ describe('IsoHomeControls', () => {
   it('renders 11 terminus checkboxes', () => {
     render(<IsoHomeControls {...defaultProps} />);
     const checkboxes = screen.getAllByRole('checkbox').filter(
-      (cb) => cb.getAttribute('aria-label') && cb.getAttribute('aria-label') !== 'Show stations' && cb.getAttribute('aria-label') !== 'Show rail lines'
+      (cb) => {
+        const label = cb.getAttribute('aria-label') ?? '';
+        return label !== 'Show stations' && label !== 'Show rail lines' &&
+          label !== 'Show route on hover' && !label.includes('mode');
+      }
     );
     expect(checkboxes).toHaveLength(11);
   });
@@ -72,6 +90,31 @@ describe('IsoHomeControls', () => {
     expect(onTerminiChange).toHaveBeenCalledWith('KGX', false);
   });
 
+  it('calls onSelectAll when clicking All button', async () => {
+    const onSelectAll = vi.fn();
+    render(<IsoHomeControls {...defaultProps} onSelectAll={onSelectAll} />);
+    await userEvent.click(screen.getByLabelText('Select all termini'));
+    expect(onSelectAll).toHaveBeenCalled();
+  });
+
+  it('calls onDeselectAll when clicking None button', async () => {
+    const onDeselectAll = vi.fn();
+    render(<IsoHomeControls {...defaultProps} onDeselectAll={onDeselectAll} />);
+    await userEvent.click(screen.getByLabelText('Deselect all termini'));
+    expect(onDeselectAll).toHaveBeenCalled();
+  });
+
+  it('disables All button when all termini selected', () => {
+    const allCRS = ['KGX', 'PAD', 'WAT', 'VIC', 'LST', 'BFR', 'CST', 'CHX', 'EUS', 'MYB', 'STP'];
+    render(<IsoHomeControls {...defaultProps} selectedTermini={allCRS} />);
+    expect(screen.getByLabelText('Select all termini')).toBeDisabled();
+  });
+
+  it('disables None button when no termini selected', () => {
+    render(<IsoHomeControls {...defaultProps} selectedTermini={[]} />);
+    expect(screen.getByLabelText('Deselect all termini')).toBeDisabled();
+  });
+
   it('renders station toggle switch', () => {
     render(<IsoHomeControls {...defaultProps} />);
     expect(screen.getByLabelText('Show stations')).toBeInTheDocument();
@@ -92,6 +135,41 @@ describe('IsoHomeControls', () => {
     render(<IsoHomeControls {...defaultProps} onShowStationsChange={onShowStationsChange} />);
     await userEvent.click(screen.getByLabelText('Show stations'));
     expect(onShowStationsChange).toHaveBeenCalled();
+  });
+
+  it('renders transport mode checkboxes', () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    expect(screen.getByLabelText('Train mode')).toBeInTheDocument();
+    expect(screen.getByLabelText('Car mode')).toBeInTheDocument();
+    expect(screen.getByLabelText('Walk mode')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tube mode')).toBeInTheDocument();
+  });
+
+  it('train mode checkbox is always disabled', () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    expect(screen.getByLabelText('Train mode')).toBeDisabled();
+  });
+
+  it('car mode checkbox is enabled and toggleable', () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    expect(screen.getByLabelText('Car mode')).not.toBeDisabled();
+  });
+
+  it('tube mode checkbox is disabled (coming soon)', () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    expect(screen.getByLabelText('Tube mode')).toBeDisabled();
+  });
+
+  it('walk mode checkbox is enabled', () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    expect(screen.getByLabelText('Walk mode')).not.toBeDisabled();
+  });
+
+  it('calls onTransportModeChange when toggling car', async () => {
+    const onTransportModeChange = vi.fn();
+    render(<IsoHomeControls {...defaultProps} onTransportModeChange={onTransportModeChange} />);
+    await userEvent.click(screen.getByLabelText('Car mode'));
+    expect(onTransportModeChange).toHaveBeenCalledWith('car', false);
   });
 
   it('shows loading indicator when isLoading is true', () => {
@@ -116,6 +194,24 @@ describe('IsoHomeControls', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('renders the How it works button', () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    expect(screen.getByText('How it works')).toBeInTheDocument();
+  });
+
+  it('opens help modal when How it works is clicked', async () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    await userEvent.click(screen.getByText('How it works'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('closes help modal when close button is clicked', async () => {
+    render(<IsoHomeControls {...defaultProps} />);
+    await userEvent.click(screen.getByText('How it works'));
+    await userEvent.click(screen.getByLabelText('Close help'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('renders the desirability layers button', () => {
     render(<IsoHomeControls {...defaultProps} />);
     expect(screen.getByText('Desirability layers')).toBeInTheDocument();
@@ -124,14 +220,14 @@ describe('IsoHomeControls', () => {
   it('starts with desirability panel collapsed', () => {
     render(<IsoHomeControls {...defaultProps} />);
     const button = screen.getByText('Desirability layers');
-    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button.closest('button')).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByLabelText('Sunshine weight')).not.toBeInTheDocument();
   });
 
   it('expands desirability panel on click', async () => {
     render(<IsoHomeControls {...defaultProps} />);
     await userEvent.click(screen.getByText('Desirability layers'));
-    expect(screen.getByText('Desirability layers')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Desirability layers').closest('button')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByLabelText('Sunshine weight')).toBeInTheDocument();
     expect(screen.getByLabelText('House price weight')).toBeInTheDocument();
   });

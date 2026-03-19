@@ -5,6 +5,7 @@ export interface Env {
 
 const VALID_CRS = ['KGX', 'PAD', 'WAT', 'VIC', 'LST', 'BFR', 'CST', 'CHX', 'EUS', 'MYB', 'STP'];
 const VALID_BUCKETS = ['30', '45', '60', '75', '90', '120'];
+const VALID_WALK_BUCKETS = VALID_BUCKETS; // same time buckets, walk profile
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -66,6 +67,18 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: CORS_HEADERS });
+    }
+
+    // GET /api/isochrone/walk/:crs/:minutes  (must be matched before the generic route)
+    const walkIsoMatch = url.pathname.match(/^\/api\/isochrone\/walk\/([A-Z]+)\/(\d+)$/);
+    if (walkIsoMatch) {
+      const [, crs, minutes] = walkIsoMatch;
+      if (!VALID_CRS.includes(crs) || !VALID_WALK_BUCKETS.includes(minutes)) {
+        return jsonResponse({ error: 'Invalid terminus or time bucket', code: 'INVALID_PARAMS' }, 400);
+      }
+      const obj = await env.ISOHOME_BUCKET.get(`isochrones/walk/${crs}/${minutes}.geojson`);
+      if (!obj) return jsonResponse({ error: 'Walk isochrone not yet available', code: 'NOT_FOUND' }, 404);
+      return geoJsonResponse(obj.body);
     }
 
     // GET /api/isochrone/:crs/:minutes

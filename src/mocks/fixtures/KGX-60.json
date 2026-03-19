@@ -25,6 +25,40 @@
         "station_count": 87,
         "computed_at": "2026-03-06T00:00:00Z"
       }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-0.261, 51.948] },
+      "properties": {
+        "feature_type": "station",
+        "crs": "HIT",
+        "name": "Hitchin",
+        "journey_minutes": 27,
+        "drive_budget": 33,
+        "terminus_crs": "KGX",
+        "terminus_name": "King's Cross",
+        "terminus_lon": -0.124,
+        "terminus_lat": 51.53,
+        "time_budget": 60,
+        "rail_route": [[-0.261, 51.948], [-0.207, 51.902], [-0.124, 51.53]]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-0.48, 52.136] },
+      "properties": {
+        "feature_type": "station",
+        "crs": "BDM",
+        "name": "Bedford",
+        "journey_minutes": 39,
+        "drive_budget": 21,
+        "terminus_crs": "KGX",
+        "terminus_name": "King's Cross",
+        "terminus_lon": -0.124,
+        "terminus_lat": 51.53,
+        "time_budget": 60,
+        "rail_route": [[-0.48, 52.136], [-0.261, 51.948], [-0.124, 51.53]]
+      }
     }
   ]
 }

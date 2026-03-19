@@ -42,7 +42,7 @@ interface IsoHomeMapProps {
 }
 
 /** Ray-casting point-in-polygon test for a single exterior ring */
-function isPointInRing(lng: number, lat: number, ring: number[][]): boolean {
+export function isPointInRing(lng: number, lat: number, ring: number[][]): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const xi = ring[i][0], yi = ring[i][1];
@@ -55,7 +55,7 @@ function isPointInRing(lng: number, lat: number, ring: number[][]): boolean {
 }
 
 /** Check if a point is inside any Polygon/MultiPolygon feature in a FeatureCollection */
-function isPointInFC(lng: number, lat: number, data: GeoJSON | undefined): boolean {
+export function isPointInFC(lng: number, lat: number, data: GeoJSON | undefined): boolean {
   if (!data || data.type !== 'FeatureCollection') return false;
   for (const feat of (data as GeoJSON.FeatureCollection).features) {
     const g = feat.geometry;
@@ -108,7 +108,7 @@ function isPointInWalkBuffer(lng: number, lat: number, data: GeoJSON | undefined
  * rather than raw geographic distance, so that with multiple overlapping termini
  * we snap to the fastest overall option.
  */
-function findNearestStation(
+export function findNearestStation(
   lng: number,
   lat: number,
   data: GeoJSON | undefined,
